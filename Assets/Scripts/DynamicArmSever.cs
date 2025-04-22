@@ -168,6 +168,12 @@ public class DynamicArmSever : MonoBehaviour
         List<BoneWeight> newBoneWeights = new List<BoneWeight>();
         List<int> newTriangles = new List<int>();
 
+        // 第一步：收集顶点及相关属性
+        List<Vector2> newUV = new List<Vector2>();
+        List<Vector2> newUV2 = new List<Vector2>();
+        List<Vector2> newUV3 = new List<Vector2>();
+        List<Vector2> newUV4 = new List<Vector2>();
+        List<Color> newColors = new List<Color>();
         // 第一步：收集所有相关顶点
         for (int subMesh = 0; subMesh < _originalMesh.subMeshCount; subMesh++)
         {
@@ -188,6 +194,18 @@ public class DynamicArmSever : MonoBehaviour
                     vertexMap[originalIndex] = newVertices.Count;
                     newVertices.Add(_originalMesh.vertices[originalIndex]);
                     newBoneWeights.Add(weight);
+
+                    // 收集UV和颜色
+                    if (_originalMesh.uv.Length > originalIndex)
+                        newUV.Add(_originalMesh.uv[originalIndex]);
+                    if (_originalMesh.uv2.Length > originalIndex)
+                        newUV2.Add(_originalMesh.uv2[originalIndex]);
+                    if (_originalMesh.uv3.Length > originalIndex)
+                        newUV3.Add(_originalMesh.uv3[originalIndex]);
+                    if (_originalMesh.uv4.Length > originalIndex)
+                        newUV4.Add(_originalMesh.uv4[originalIndex]);
+                    if (_originalMesh.colors.Length > originalIndex)
+                        newColors.Add(_originalMesh.colors[originalIndex]);
                 }
             }
         }
@@ -222,11 +240,11 @@ public class DynamicArmSever : MonoBehaviour
         newMesh.triangles = newTriangles.ToArray();
 
         // 添加材质和UV处理
-        newMesh.uv = _originalMesh.uv;
-        newMesh.uv2 = _originalMesh.uv2;
-        newMesh.uv3 = _originalMesh.uv3;
-        newMesh.uv4 = _originalMesh.uv4;
-        newMesh.colors = _originalMesh.colors;
+        newMesh.uv = newUV.ToArray();
+        if (newUV2.Count == newVertices.Count) newMesh.uv2 = newUV2.ToArray();
+        if (newUV3.Count == newVertices.Count) newMesh.uv3 = newUV3.ToArray();
+        if (newUV4.Count == newVertices.Count) newMesh.uv4 = newUV4.ToArray();
+        if (newColors.Count == newVertices.Count) newMesh.colors = newColors.ToArray();
 
         // 处理子网格材质
         List<Material> materials = new List<Material>();

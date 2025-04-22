@@ -415,7 +415,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _shoulderBone: {fileID: 668446601}
-  _woundMaterial: {fileID: 2100000, guid: d5beeade00b119c4b8bd91dd26412088, type: 2}
+  _woundMaterial: {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
   _severForce: 5
   _idleAnimation: {fileID: 0}
 --- !u!114 &1377456856
