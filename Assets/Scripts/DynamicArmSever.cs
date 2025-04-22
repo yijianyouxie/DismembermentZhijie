@@ -339,6 +339,10 @@ public class DynamicArmSever : MonoBehaviour
         }
 
         newBodyMesh.triangles = validTriangles.ToArray();
+        newBodyMesh.uv = _originalMesh.uv;
+        newBodyMesh.uv2 = _originalMesh.uv2;
+        newBodyMesh.uv3 = _originalMesh.uv3;
+        newBodyMesh.uv4 = _originalMesh.uv4;
         newBodyMesh.RecalculateNormals();
 
         // 关键：保持原始骨骼配置
