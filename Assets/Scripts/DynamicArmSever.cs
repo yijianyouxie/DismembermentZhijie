@@ -79,11 +79,14 @@ public class DynamicArmSever : MonoBehaviour
 
         _isSevered = true;
     }
-
+    public static Dictionary<Transform, int> originalBoneIndexMap = new Dictionary<Transform, int>();
     Transform DuplicateBoneHierarchy(Transform original)
     {
+        originalBoneIndexMap.Clear(); // 清空旧的映射
+
         GameObject newRoot = new GameObject(original.name); // 保持相同名称
         newRoot.transform.SetPositionAndRotation(original.position, original.rotation);
+        //Debug.LogError("====original.position:"+ original.position + " newRoot.transform:"+ newRoot.transform.position);
 
         // 使用字典映射原始骨骼和新骨骼
         Dictionary<Transform, Transform> boneMap = new Dictionary<Transform, Transform>();
@@ -101,22 +104,44 @@ public class DynamicArmSever : MonoBehaviour
             {
                 // 创建新骨骼
                 GameObject newBone = new GameObject(child.name);
-                newBone.transform.SetParent(boneMap[current]);
-                //newBone.transform.SetLocalPositionAndRotation(child.localPosition, child.localRotation);
-                newBone.transform.localPosition = child.localPosition;
-                newBone.transform.localRotation = child.localRotation;
+                //newBone.transform.SetParent(boneMap[current]);
+                ////newBone.transform.SetLocalPositionAndRotation(child.localPosition, child.localRotation);
+                //newBone.transform.localPosition = child.localPosition;
+                //newBone.transform.localRotation = child.localRotation;
+                // 使用世界坐标对齐
+                newBone.transform.SetParent(boneMap[current], true);
+                newBone.transform.position = child.position;
+                newBone.transform.rotation = child.rotation;
+                //Debug.LogError("====child.position:" + child.position + " newBone.transform.position:" + newBone.transform.position);
 
                 boneMap.Add(child, newBone.transform);
                 stack.Push(child);
             }
         }
+
+        // 在遍历骨骼时记录索引
+        List<Transform> newBoneList = new List<Transform>();
+        foreach (var bone in _armBones)
+        {
+            Transform newBone;
+            if (boneMap.TryGetValue(bone, out newBone))
+            {
+                newBoneList.Add(newBone);
+            }
+        }
+
+        for (int i = 0; i < newBoneList.Count; i++)
+        {
+            originalBoneIndexMap[_armBones[i]] = i;
+        }
+
         return newRoot.transform;
     }
 
     void CreateSeveredArmMesh(Transform newRoot)
     {
         // 获取手臂部分的网格数据
-        Mesh severedMesh = ExtractSubMesh(_armBones);
+        Mesh severedMesh = ExtractSubMesh(_armBones, newRoot);
 
         // 创建新渲染器
         SkinnedMeshRenderer newSMR = newRoot.gameObject.AddComponent<SkinnedMeshRenderer>();
@@ -139,6 +164,15 @@ public class DynamicArmSever : MonoBehaviour
             newBones.Add(newBone);
         }
 
+        // 重新计算绑定姿势
+        Matrix4x4[] bindPoses = new Matrix4x4[newBones.Count];
+        for (int i = 0; i < newBones.Count; i++)
+        {
+            // 计算相对根骨骼的变换矩阵
+            bindPoses[i] = newBones[i].worldToLocalMatrix * newRoot.localToWorldMatrix;
+        }
+        severedMesh.bindposes = bindPoses;
+
         newSMR.bones = newBones.ToArray();
         newSMR.rootBone = newBones[0];
         // 修改材质设置方式
@@ -149,7 +183,7 @@ public class DynamicArmSever : MonoBehaviour
     }
 
 
-    Mesh ExtractSubMesh(List<Transform> targetBones)
+    Mesh ExtractSubMesh(List<Transform> targetBones, Transform newRoot)
     {
         Mesh newMesh = new Mesh();
         BoneWeight[] weights = _originalMesh.boneWeights;
@@ -174,6 +208,11 @@ public class DynamicArmSever : MonoBehaviour
         List<Vector2> newUV3 = new List<Vector2>();
         List<Vector2> newUV4 = new List<Vector2>();
         List<Color> newColors = new List<Color>();
+
+        //// 获取坐标转换矩阵
+        //Matrix4x4 originalRootWorldMatrix = _bodySMR.rootBone.localToWorldMatrix;
+        //Matrix4x4 newRootWorldMatrix = newRoot.localToWorldMatrix;
+
         // 第一步：收集所有相关顶点
         for (int subMesh = 0; subMesh < _originalMesh.subMeshCount; subMesh++)
         {
@@ -191,9 +230,31 @@ public class DynamicArmSever : MonoBehaviour
 
                 if (isTargetVertex && !vertexMap.ContainsKey(originalIndex))
                 {
+                    //// 坐标转换
+                    //Vector3 worldPos = originalRootWorldMatrix.MultiplyPoint3x4(_originalMesh.vertices[originalIndex]);
+                    //Vector3 localPos = newRootWorldMatrix.inverse.MultiplyPoint3x4(worldPos);
+                    // 获取顶点在世界空间的位置
+                    Vector3 worldPos = _bodySMR.transform.TransformPoint(_originalMesh.vertices[originalIndex]);
+                    // 转换到新骨骼的局部空间
+                    Vector3 localPos = newRoot.InverseTransformPoint(worldPos);
+
                     vertexMap[originalIndex] = newVertices.Count;
-                    newVertices.Add(_originalMesh.vertices[originalIndex]);
-                    newBoneWeights.Add(weight);
+                    newVertices.Add(localPos);
+                    //Debug.LogError("========_orivertices:"+ _originalMesh.vertices[originalIndex] + " worldPos:"+ worldPos + " localPos:" + localPos);
+
+                    BoneWeight newWeight = new BoneWeight();
+
+                    // 转换每个骨骼索引
+                    newWeight.boneIndex0 = GetMappedBoneIndex(weight.boneIndex0);
+                    newWeight.boneIndex1 = GetMappedBoneIndex(weight.boneIndex1);
+                    newWeight.boneIndex2 = GetMappedBoneIndex(weight.boneIndex2);
+                    newWeight.boneIndex3 = GetMappedBoneIndex(weight.boneIndex3);
+
+                    newWeight.weight0 = weight.weight0;
+                    newWeight.weight1 = weight.weight1;
+                    newWeight.weight2 = weight.weight2;
+                    newWeight.weight3 = weight.weight3;
+                    newBoneWeights.Add(newWeight);
 
                     // 收集UV和颜色
                     if (_originalMesh.uv.Length > originalIndex)
@@ -289,6 +350,19 @@ public class DynamicArmSever : MonoBehaviour
         return newMesh;
     }
 
+    // 新增辅助方法：将原始骨骼索引转换为新骨骼索引
+    int GetMappedBoneIndex(int originalBoneIndex)
+    {
+        if (originalBoneIndex < 0 || originalBoneIndex >= _bodySMR.bones.Length)
+            return 0;
+
+        Transform originalBone = _bodySMR.bones[originalBoneIndex];
+        if (originalBoneIndexMap.ContainsKey(originalBone))
+            return originalBoneIndexMap[originalBone];
+
+        return 0; // 默认指向根骨骼
+    }
+
     // 新增辅助方法
     bool IsBoneInArm(int boneIndex)
     {
@@ -364,7 +438,7 @@ public class DynamicArmSever : MonoBehaviour
         collider.convex = true;
         collider.sharedMesh = severedArm.GetComponent<SkinnedMeshRenderer>().sharedMesh;
 
-        severedArm.AddComponent<BoneFreezer>();
+        //severedArm.AddComponent<BoneFreezer>();
     }
 
     void CreateWoundEffect()
@@ -424,8 +498,8 @@ public class BoneFreezer : MonoBehaviour
         
         for(int i=0; i<_bones.Length; i++)
         {
-            _initialPositions[i] = _bones[i].localPosition;
-            _initialRotations[i] = _bones[i].localRotation;
+            _initialPositions[i] = _bones[i].position;
+            _initialRotations[i] = _bones[i].rotation;
         }
     }
 
@@ -433,8 +507,8 @@ public class BoneFreezer : MonoBehaviour
     {
         for(int i=0; i<_bones.Length; i++)
         {
-            _bones[i].localPosition = _initialPositions[i];
-            _bones[i].localRotation = _initialRotations[i];
+            _bones[i].position = _initialPositions[i];
+            _bones[i].rotation = _initialRotations[i];
         }
     }
 }
@@ -446,11 +520,11 @@ public class BoneVisualizer : MonoBehaviour
         SkinnedMeshRenderer smr = GetComponent<SkinnedMeshRenderer>();
         if (smr == null) return;
 
-        Gizmos.color = Color.red;
+        Gizmos.color = Color.yellow;
         foreach (var bone in smr.bones)
         {
             if (bone == null) continue;
-            Gizmos.DrawSphere(bone.position, 0.01f);
+            Gizmos.DrawSphere(bone.position, 0.03f);
             if (bone.parent != null)
                 Gizmos.DrawLine(bone.position, bone.parent.position);
         }
