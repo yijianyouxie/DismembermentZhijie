@@ -5,7 +5,9 @@ using System.Collections.Generic;
 public class DynamicArmSever : MonoBehaviour
 {
     [Header("Settings")]
-    [SerializeField] private Transform _shoulderBone;  // 肩膀骨骼（分离点）
+    //[SerializeField] private Transform _shoulderBone;  // 肩膀骨骼（分离点）
+    //[SerializeField] private Transform _headBone;  // 肩膀骨骼（分离点）
+    [SerializeField] private List<Transform> dismemberBoneList;  // 肩膀骨骼（分离点）
     [SerializeField] private Material _woundMaterial;  // 截面材质
     [SerializeField] private float _severForce = 5f;   // 分离力度
 
@@ -17,8 +19,10 @@ public class DynamicArmSever : MonoBehaviour
     private Transform _originalRootBone;
     private Transform[] _originalBones;
     private Material[] _severedMaterials;
-    private bool _isSevered;
-    private List<Transform> _armBones = new List<Transform>();
+    //private bool _isSevered;
+    private Dictionary<Transform, List<Transform>> _partBonesDic = new Dictionary<Transform, List<Transform>>(4);
+    private HashSet<int> partSeverdSet = new HashSet<int>();
+    //private List<Transform> _partBonesList = new List<Transform>();
 
     void Start()
     {
@@ -28,59 +32,95 @@ public class DynamicArmSever : MonoBehaviour
         _originalRootBone = _bodySMR.rootBone;
         _originalBones = _bodySMR.bones;
 
-        // 预先记录手臂骨骼链
-        CollectArmBones(_shoulderBone);
+        //// 预先记录手臂骨骼链
+        //CollectArmBones(_shoulderBone);
+        //CollectArmBones(_headBone);
+        Transform tr;
+        for(int i = 0; i < dismemberBoneList.Count; i++)
+        {
+            tr = dismemberBoneList[i];
+            if(null != tr)
+            {
+                CollectArmBones(tr);
+            }
+        }
     }
 
     void LateUpdate()
     {
         if (Input.GetKeyDown(KeyCode.S) )
         {
-            SeverArm();
+            if(partSeverdSet.Contains(0))
+            {
+                return;
+            }
+            SeverArm(dismemberBoneList[0]);
+            partSeverdSet.Add(0);
+        }
+
+        if(Input.GetKeyDown(KeyCode.A))
+        {
+            if (partSeverdSet.Contains(1))
+            {
+                return;
+            }
+            SeverArm(dismemberBoneList[1]);
+            partSeverdSet.Add(1);
+        }
+        if (Input.GetKeyDown(KeyCode.D))
+        {
+            if (partSeverdSet.Contains(2))
+            {
+                return;
+            }
+            SeverArm(dismemberBoneList[2]);
+            partSeverdSet.Add(2);
         }
     }
 
     // 收集手臂骨骼链
     void CollectArmBones(Transform startBone)
     {
-        _armBones.Clear();
+        var bones = new List<Transform>(4);
+        _partBonesDic[startBone] = bones;
+        bones.Clear();
         Transform current = startBone;
         while (current != null)
         {
-            _armBones.Add(current);
+            bones.Add(current);
             if (current.childCount > 0) current = current.GetChild(0);
             else break;
         }
     }
 
-    public void SeverArm()
+    public void SeverArm(Transform tr)
     {
-        if (_isSevered) return;
+        //if (_isSevered) return;
 
         Animation ani = GetComponent<Animation>();
         ani.Sample();
 
         // 步骤1：复制手臂骨骼
-        Transform severedRoot = DuplicateBoneHierarchy(_shoulderBone);
+        Transform severedRoot = DuplicateBoneHierarchy(tr);
 
         // 步骤2：创建手臂网格
-        CreateSeveredArmMesh(severedRoot);
+        CreateSeveredArmMesh(tr, severedRoot);
 
         // 步骤3：更新身体网格
-        UpdateBodyMesh();
+        UpdateBodyMesh(tr);
 
         // 步骤4：添加物理效果
         AddPhysicsToSeveredArm(severedRoot.gameObject);
 
         // 步骤5：创建伤口
-        CreateWoundEffect();
+        CreateWoundEffect(tr);
 
         // 重置身体动画
         Animation anim = GetComponent<Animation>();
         anim.Stop();
         anim.Play();
 
-        _isSevered = true;
+        //_isSevered = true;
     }
     public static Dictionary<Transform, int> originalBoneIndexMap = new Dictionary<Transform, int>();
     Transform DuplicateBoneHierarchy(Transform original)
@@ -133,7 +173,8 @@ public class DynamicArmSever : MonoBehaviour
 
         // 在遍历骨骼时记录索引
         List<Transform> newBoneList = new List<Transform>();
-        foreach (var bone in _armBones)
+        var partBonesList = _partBonesDic[original];
+        foreach (var bone in partBonesList)
         {
             Transform newBone;
             if (boneMap.TryGetValue(bone, out newBone))
@@ -144,16 +185,17 @@ public class DynamicArmSever : MonoBehaviour
 
         for (int i = 0; i < newBoneList.Count; i++)
         {
-            originalBoneIndexMap[_armBones[i]] = i;
+            originalBoneIndexMap[partBonesList[i]] = i;
         }
 
         return newRoot.transform;
     }
 
-    void CreateSeveredArmMesh(Transform newRoot)
+    void CreateSeveredArmMesh(Transform original, Transform newRoot)
     {
+        var partBonesList = _partBonesDic[original];
         // 获取手臂部分的网格数据
-        Mesh severedMesh = ExtractSubMesh(_armBones, newRoot);
+        Mesh severedMesh = ExtractSubMesh(partBonesList, newRoot);
 
         // 创建新渲染器
         SkinnedMeshRenderer newSMR = newRoot.gameObject.AddComponent<SkinnedMeshRenderer>();
@@ -162,7 +204,7 @@ public class DynamicArmSever : MonoBehaviour
 
         // 重新绑定骨骼（关键修正）
         List<Transform> newBones = new List<Transform>();
-        foreach (Transform bone in _armBones)
+        foreach (Transform bone in partBonesList)
         {
             // 注意：从newRoot开始查找（包含自身）
             Transform newBone = newRoot.FindDeepChild(bone.name);
@@ -401,13 +443,14 @@ public class DynamicArmSever : MonoBehaviour
     }
 
     // 新增辅助方法
-    bool IsBoneInArm(int boneIndex)
+    bool IsBoneInArm(List<Transform> partBonesList, int boneIndex)
     {
         if (boneIndex < 0 || boneIndex >= _originalBones.Length) return false;
-        return _armBones.Contains(_originalBones[boneIndex]);
+        return partBonesList.Contains(_originalBones[boneIndex]);
     }
-    void UpdateBodyMesh()
+    void UpdateBodyMesh(Transform original)
     {
+        var partBonesList = _partBonesDic[original];
         // 创建新的身体网格（保持原始骨骼结构）
         Mesh newBodyMesh = new Mesh();
 
@@ -431,10 +474,10 @@ public class DynamicArmSever : MonoBehaviour
                     int index = triangles[i + j];
                     BoneWeight w = boneWeights[index];
 
-                    if (IsBoneInArm(w.boneIndex0) ||
-                       IsBoneInArm(w.boneIndex1) ||
-                       IsBoneInArm(w.boneIndex2) ||
-                       IsBoneInArm(w.boneIndex3))
+                    if (IsBoneInArm(partBonesList, w.boneIndex0) ||
+                       IsBoneInArm(partBonesList, w.boneIndex1) ||
+                       IsBoneInArm(partBonesList, w.boneIndex2) ||
+                       IsBoneInArm(partBonesList, w.boneIndex3))
                     {
                         keepTriangle = false;
                         break;
@@ -464,6 +507,8 @@ public class DynamicArmSever : MonoBehaviour
 
         // 重置动画
         GetComponent<Animation>().Play();
+
+        _originalMesh = newBodyMesh;
     }
 
     void AddPhysicsToSeveredArm(GameObject severedArm)
@@ -479,12 +524,12 @@ public class DynamicArmSever : MonoBehaviour
         //severedArm.AddComponent<BoneFreezer>();
     }
 
-    void CreateWoundEffect()
+    void CreateWoundEffect(Transform original)
     {
         GameObject wound = new GameObject("Wound");
-        wound.transform.SetParent(_shoulderBone.parent);
-        wound.transform.position = _shoulderBone.position;
-        wound.transform.rotation = _shoulderBone.rotation;
+        wound.transform.SetParent(original.parent);
+        wound.transform.position = original.position;
+        wound.transform.rotation = original.rotation;
 
         MeshFilter mf = wound.AddComponent<MeshFilter>();
         mf.mesh = GenerateQuadMesh();
