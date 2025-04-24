@@ -23,6 +23,7 @@ public class DynamicArmSever : MonoBehaviour
     private Dictionary<Transform, List<Transform>> _partBonesDic = new Dictionary<Transform, List<Transform>>(4);
     private HashSet<int> partSeverdSet = new HashSet<int>();
     //private List<Transform> _partBonesList = new List<Transform>();
+    private float boneWeightThreshold = 0.3f;
 
     void Start()
     {
@@ -108,8 +109,8 @@ public class DynamicArmSever : MonoBehaviour
     {
         //if (_isSevered) return;
 
-        Animation ani = GetComponent<Animation>();
-        ani.Sample();
+        //Animation ani = GetComponent<Animation>();
+        //ani.Sample();
 
         // 步骤1：复制手臂骨骼
         Transform severedRoot = DuplicateBoneHierarchy(tr);
@@ -124,7 +125,7 @@ public class DynamicArmSever : MonoBehaviour
         //AddPhysicsToSeveredArm(severedRoot.gameObject);
 
         // 步骤5：创建伤口
-        CreateWoundEffect(tr);
+        //CreateWoundEffect(tr);
 
         // 重置身体动画
         Animation anim = GetComponent<Animation>();
@@ -300,13 +301,15 @@ public class DynamicArmSever : MonoBehaviour
                 BoneWeight weight = weights[originalIndex];
 
                 // 检查顶点是否属于目标骨骼
-                bool isTargetVertex = targetBoneIndices.Contains(weight.boneIndex0) ||
-                                      targetBoneIndices.Contains(weight.boneIndex1) ||
-                                      targetBoneIndices.Contains(weight.boneIndex2) ||
-                                      targetBoneIndices.Contains(weight.boneIndex3);
+                bool isTargetVertex = (targetBoneIndices.Contains(weight.boneIndex0) && weight.weight0 >= boneWeightThreshold) ||
+                                      (targetBoneIndices.Contains(weight.boneIndex1) && weight.weight1 >= boneWeightThreshold) ||
+                                      (targetBoneIndices.Contains(weight.boneIndex2) && weight.weight2 >= boneWeightThreshold) ||
+                                      (targetBoneIndices.Contains(weight.boneIndex3) && weight.weight3 >= boneWeightThreshold);
 
                 if (isTargetVertex && !vertexMap.ContainsKey(originalIndex))
                 {
+                    //Debug.LogError(string.Format("====权重{0}|{1}|{2}|{3}", weight.weight0, weight.weight1, weight.weight2, weight.weight3));
+                    //Debug.LogError(string.Format("====Bone{0}|{1}|{2}|{3}", _originalBones[weight.boneIndex0].name, _originalBones[weight.boneIndex1].name, _originalBones[weight.boneIndex2].name, _originalBones[weight.boneIndex3].name));
                     //// 坐标转换
                     //Vector3 worldPos = originalRootWorldMatrix.MultiplyPoint3x4(_originalMesh.vertices[originalIndex]);
                     //Vector3 localPos = newRootWorldMatrix.inverse.MultiplyPoint3x4(worldPos);
@@ -455,7 +458,7 @@ public class DynamicArmSever : MonoBehaviour
     }
 
     // 新增辅助方法
-    bool IsBoneInArm(List<Transform> partBonesList, int boneIndex)
+    bool IsBoneInPart(List<Transform> partBonesList, int boneIndex)
     {
         if (boneIndex < 0 || boneIndex >= _originalBones.Length) return false;
         return partBonesList.Contains(_originalBones[boneIndex]);
@@ -486,18 +489,17 @@ public class DynamicArmSever : MonoBehaviour
                     int index = triangles[i + j];
                     BoneWeight w = boneWeights[index];
 
-                    // 获取主骨骼索引
-                    float maxWeight = Mathf.Max(w.weight0, w.weight1, w.weight2, w.weight3);
-                    int mainBoneIndex = -1;
-                    if (maxWeight == w.weight0) mainBoneIndex = w.boneIndex0;
-                    else if (maxWeight == w.weight1) mainBoneIndex = w.boneIndex1;
-                    else if (maxWeight == w.weight2) mainBoneIndex = w.boneIndex2;
-                    else if (maxWeight == w.weight3) mainBoneIndex = w.boneIndex3;
-
-                    // 仅当主骨骼属于分离部分时移除
-                    if (mainBoneIndex != -1 && IsBoneInArm(partBonesList, mainBoneIndex))
+                    bool isPartOfArm = (IsBoneInPart(partBonesList, w.boneIndex0) && w.weight0 >= boneWeightThreshold) ||
+                                        (IsBoneInPart(partBonesList, w.boneIndex1) && w.weight1 >= boneWeightThreshold) ||
+                                        (IsBoneInPart(partBonesList, w.boneIndex2) && w.weight2 >= boneWeightThreshold) ||
+                                        (IsBoneInPart(partBonesList, w.boneIndex3) && w.weight3 >= boneWeightThreshold);
+                    if (isPartOfArm)
                     {
-                        keepTriangle = false;
+                        keepTriangle = false; // 该顶点属于目标骨骼，标记三角形为可剔除
+                    }
+                    else
+                    {
+                        keepTriangle = true; // 至少一个顶点属于身体，保留三角形
                         break;
                     }
                 }
