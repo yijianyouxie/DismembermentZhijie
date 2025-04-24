@@ -18,7 +18,7 @@ public class DynamicArmSever : MonoBehaviour
     private Mesh _originalBodyMesh;
     private Transform _originalRootBone;
     private Transform[] _originalBones;
-    private Material[] _severedMaterials;
+    //private Material[] _severedMaterials;
     //private bool _isSevered;
     private Dictionary<Transform, List<Transform>> _partBonesDic = new Dictionary<Transform, List<Transform>>(4);
     private HashSet<int> partSeverdSet = new HashSet<int>();
@@ -91,6 +91,17 @@ public class DynamicArmSever : MonoBehaviour
             if (current.childCount > 0) current = current.GetChild(0);
             else break;
         }
+
+        //输出每部分包含的骨头
+        string s = string.Empty;
+        s += startBone.name;
+        for(int i = 0; i< bones.Count; i++)
+        {
+            s += "|" + bones[i].name;
+        }
+
+        Debug.LogError("====CollectArmBones:" + s);
+
     }
 
     public void SeverArm(Transform tr)
@@ -110,7 +121,7 @@ public class DynamicArmSever : MonoBehaviour
         UpdateBodyMesh(tr);
 
         // 步骤4：添加物理效果
-        AddPhysicsToSeveredArm(severedRoot.gameObject);
+        //AddPhysicsToSeveredArm(severedRoot.gameObject);
 
         // 步骤5：创建伤口
         CreateWoundEffect(tr);
@@ -230,7 +241,8 @@ public class DynamicArmSever : MonoBehaviour
         newSMR.bones = newBones.ToArray();
         newSMR.rootBone = newBones[0];
         // 修改材质设置方式
-        newSMR.sharedMaterials = _severedMaterials;
+        //newSMR.sharedMaterials = _severedMaterials;
+        newSMR.sharedMaterials = _bodySMR.sharedMaterials;
 
         // 添加调试可视化
         newRoot.gameObject.AddComponent<BoneVisualizer>();
@@ -386,40 +398,40 @@ public class DynamicArmSever : MonoBehaviour
         if (newUV4.Count == newVertices.Count) newMesh.uv4 = newUV4.ToArray();
         if (newColors.Count == newVertices.Count) newMesh.colors = newColors.ToArray();
 
-        // 处理子网格材质
-        List<Material> materials = new List<Material>(4);
-        newMesh.subMeshCount = _originalMesh.subMeshCount;
+        //// 处理子网格材质
+        //List<Material> materials = new List<Material>(4);
+        //newMesh.subMeshCount = _originalMesh.subMeshCount;
 
-        for (int i = 0; i < _originalMesh.subMeshCount; i++)
-        {
-            List<int> subTriangles = new List<int>(1024);
-            int[] triangles = oriTriangles[i];
+        //for (int i = 0; i < _originalMesh.subMeshCount; i++)
+        //{
+        //    List<int> subTriangles = new List<int>(1024);
+        //    int[] triangles = oriTriangles[i];
 
-            for (int j = 0; j < triangles.Length; j += 3)
-            {
-                if (j + 2 >= triangles.Length) continue;
+        //    for (int j = 0; j < triangles.Length; j += 3)
+        //    {
+        //        if (j + 2 >= triangles.Length) continue;
 
-                int i0 = triangles[j];
-                int i1 = triangles[j + 1];
-                int i2 = triangles[j + 2];
+        //        int i0 = triangles[j];
+        //        int i1 = triangles[j + 1];
+        //        int i2 = triangles[j + 2];
 
-                if (vertexMap.TryGetValue(i0, out i0) &&
-                   vertexMap.TryGetValue(i1, out i1) &&
-                   vertexMap.TryGetValue(i2, out i2))
-                {
-                    subTriangles.Add(i0);
-                    subTriangles.Add(i1);
-                    subTriangles.Add(i2);
-                }
-            }
+        //        if (vertexMap.TryGetValue(i0, out i0) &&
+        //           vertexMap.TryGetValue(i1, out i1) &&
+        //           vertexMap.TryGetValue(i2, out i2))
+        //        {
+        //            subTriangles.Add(i0);
+        //            subTriangles.Add(i1);
+        //            subTriangles.Add(i2);
+        //        }
+        //    }
 
-            newMesh.SetTriangles(subTriangles, i);
-            materials.Add(_bodySMR.sharedMaterials[i]);
-        }
+        //    newMesh.SetTriangles(subTriangles, i);
+        //    materials.Add(_bodySMR.sharedMaterials[i]);
+        //}
 
-        // 保存材质信息
-        newMesh.name = "SeveredMesh";
-        _severedMaterials = materials.ToArray(); // 新增类字段 private Material[] _severedMaterials;
+        //// 保存材质信息
+        //newMesh.name = "SeveredMesh";
+        //_severedMaterials = materials.ToArray(); // 新增类字段 private Material[] _severedMaterials;
 
 
         newMesh.RecalculateNormals();
@@ -474,10 +486,16 @@ public class DynamicArmSever : MonoBehaviour
                     int index = triangles[i + j];
                     BoneWeight w = boneWeights[index];
 
-                    if (IsBoneInArm(partBonesList, w.boneIndex0) ||
-                       IsBoneInArm(partBonesList, w.boneIndex1) ||
-                       IsBoneInArm(partBonesList, w.boneIndex2) ||
-                       IsBoneInArm(partBonesList, w.boneIndex3))
+                    // 获取主骨骼索引
+                    float maxWeight = Mathf.Max(w.weight0, w.weight1, w.weight2, w.weight3);
+                    int mainBoneIndex = -1;
+                    if (maxWeight == w.weight0) mainBoneIndex = w.boneIndex0;
+                    else if (maxWeight == w.weight1) mainBoneIndex = w.boneIndex1;
+                    else if (maxWeight == w.weight2) mainBoneIndex = w.boneIndex2;
+                    else if (maxWeight == w.weight3) mainBoneIndex = w.boneIndex3;
+
+                    // 仅当主骨骼属于分离部分时移除
+                    if (mainBoneIndex != -1 && IsBoneInArm(partBonesList, mainBoneIndex))
                     {
                         keepTriangle = false;
                         break;
