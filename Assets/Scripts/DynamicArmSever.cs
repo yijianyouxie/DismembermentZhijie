@@ -122,7 +122,7 @@ public class DynamicArmSever : MonoBehaviour
         UpdateBodyMesh(tr);
 
         // 步骤4：添加物理效果
-        //AddPhysicsToSeveredArm(severedRoot.gameObject);
+        AddPhysicsToSeveredArm(severedRoot.gameObject);
 
         // 步骤5：创建伤口
         //CreateWoundEffect(tr);
@@ -259,13 +259,13 @@ public class DynamicArmSever : MonoBehaviour
         Mesh newMesh = new Mesh();
         BoneWeight[] weights = _originalMesh.boneWeights;
 
-        // 获取目标骨骼的索引
-        HashSet<int> targetBoneIndices = new HashSet<int>();
-        for (int i = 0; i < _originalBones.Length; i++)
-        {
-            if (targetBones.Contains(_originalBones[i]))
-                targetBoneIndices.Add(i);
-        }
+        //// 获取目标骨骼的索引
+        //HashSet<int> targetBoneIndices = new HashSet<int>();
+        //for (int i = 0; i < _originalBones.Length; i++)
+        //{
+        //    if (targetBones.Contains(_originalBones[i]))
+        //        targetBoneIndices.Add(i);
+        //}
 
         // 顶点映射字典（旧索引 -> 新索引）
         Dictionary<int, int> vertexMap = new Dictionary<int, int>(2048);
@@ -301,10 +301,10 @@ public class DynamicArmSever : MonoBehaviour
                 BoneWeight weight = weights[originalIndex];
 
                 // 检查顶点是否属于目标骨骼
-                bool isTargetVertex = (targetBoneIndices.Contains(weight.boneIndex0) && weight.weight0 >= boneWeightThreshold) ||
-                                      (targetBoneIndices.Contains(weight.boneIndex1) && weight.weight1 >= boneWeightThreshold) ||
-                                      (targetBoneIndices.Contains(weight.boneIndex2) && weight.weight2 >= boneWeightThreshold) ||
-                                      (targetBoneIndices.Contains(weight.boneIndex3) && weight.weight3 >= boneWeightThreshold);
+                bool isTargetVertex = (IsBoneInPart(targetBones, weight.boneIndex0) && weight.weight0 >= boneWeightThreshold) ||
+                                      (IsBoneInPart(targetBones, weight.boneIndex1) && weight.weight1 >= boneWeightThreshold) ||
+                                      (IsBoneInPart(targetBones, weight.boneIndex2) && weight.weight2 >= boneWeightThreshold) ||
+                                      (IsBoneInPart(targetBones, weight.boneIndex3) && weight.weight3 >= boneWeightThreshold);
 
                 if (isTargetVertex && !vertexMap.ContainsKey(originalIndex))
                 {
