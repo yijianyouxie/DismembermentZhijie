@@ -12,26 +12,43 @@ public class DynamicArmSever : MonoBehaviour
     [SerializeField] private float _severForce = 5f;   // 分离力度
 
     private SkinnedMeshRenderer _bodySMR;
+    private Transform _bodySMRTr;
     [SerializeField]
     private AnimationClip _idleAnimation;
     private Mesh _originalMesh;
-    private Mesh _originalBodyMesh;
+    //private Mesh _originalBodyMesh;
     private Transform _originalRootBone;
     private Transform[] _originalBones;
+    private Dictionary<Transform, int> _boneTr2IndexDic = new Dictionary<Transform, int>(32);
+    private Dictionary<int, Transform> _boneIndex2TrDic = new Dictionary<int, Transform>(32);
     //private Material[] _severedMaterials;
     //private bool _isSevered;
-    private Dictionary<Transform, List<Transform>> _partBonesDic = new Dictionary<Transform, List<Transform>>(4);
+    private Dictionary<Transform, HashSet<int>> _partBonesDic = new Dictionary<Transform, HashSet<int>>(4);
     private HashSet<int> partSeverdSet = new HashSet<int>();
-    //private List<Transform> _partBonesList = new List<Transform>();
+    private List<int> _partBonesList = new List<int>(8);
     private float boneWeightThreshold = 0.3f;
+
+    private Mesh bakedMesh;
+    private Mesh newMesh;
 
     void Start()
     {
         _bodySMR = GetComponentInChildren<SkinnedMeshRenderer>();
+        _bodySMRTr = _bodySMR.transform;
         _originalMesh = Instantiate(_bodySMR.sharedMesh); // 创建网格副本
-        _originalBodyMesh = _bodySMR.sharedMesh;
+        GetOriginalInfos();
+        //_originalBodyMesh = _bodySMR.sharedMesh;
         _originalRootBone = _bodySMR.rootBone;
         _originalBones = _bodySMR.bones;
+
+        _boneTr2IndexDic.Clear();
+        _boneIndex2TrDic.Clear();
+        var len = _originalBones.Length;
+        for (int i = 0; i < len; i++)
+        {
+            _boneTr2IndexDic[_originalBones[i]] = i;
+            _boneIndex2TrDic[i] = _originalBones[i];
+        }
 
         //// 预先记录手臂骨骼链
         //CollectArmBones(_shoulderBone);
@@ -42,8 +59,54 @@ public class DynamicArmSever : MonoBehaviour
             tr = dismemberBoneList[i];
             if(null != tr)
             {
-                CollectArmBones(tr);
+                CollectPartBones(tr);
             }
+        }
+
+        bakedMesh = new Mesh();
+        newMesh = new Mesh();
+}
+    private List<BoneWeight> _oriMeshBoneWeights = new List<BoneWeight>(1024);
+    private List<Vector2> _oriUVs = new List<Vector2>(512);
+    private List<Vector2> _oriUVs2 = new List<Vector2>(512);
+    private List<Vector2> _oriUVs3 = new List<Vector2>(512);
+    private List<Vector2> _oriUVs4 = new List<Vector2>(512);
+    private List<Color> _oriColors = new List<Color>(512);
+    private int _originaleSubmeshCount = 0;
+    private Dictionary<int, List<int>> oriTriangles = new Dictionary<int, List<int>>(4);
+
+    private void GetOriginalInfos()
+    {
+        _oriMeshBoneWeights.Clear();
+        _oriUVs.Clear();
+        _oriUVs2.Clear();
+        _oriUVs3.Clear();
+        _oriUVs4.Clear();
+        _oriColors.Clear();
+
+        _originalMesh.GetBoneWeights(_oriMeshBoneWeights);
+
+        _originalMesh.GetUVs(0, _oriUVs);
+        _originalMesh.GetUVs(1, _oriUVs2);
+        _originalMesh.GetUVs(2, _oriUVs3);
+        _originalMesh.GetUVs(3, _oriUVs4);
+        _originalMesh.GetColors(_oriColors);
+
+        _originaleSubmeshCount = _originalMesh.subMeshCount;
+        List<int> subTriangles;
+        for (int subMesh = 0; subMesh < _originaleSubmeshCount; subMesh++)
+        {
+            if(oriTriangles.TryGetValue(subMesh, out subTriangles))
+            {
+                subTriangles.Clear();
+                _originalMesh.GetTriangles(subTriangles, subMesh);
+            }
+            else
+            {
+                subTriangles = new List<int>(512);
+                _originalMesh.GetTriangles(subTriangles, subMesh);
+                oriTriangles[subMesh] = subTriangles;
+            }            
         }
     }
 
@@ -80,28 +143,19 @@ public class DynamicArmSever : MonoBehaviour
     }
 
     // 收集手臂骨骼链
-    void CollectArmBones(Transform startBone)
+    void CollectPartBones(Transform startBone)
     {
-        var bones = new List<Transform>(4);
+        var bones = new HashSet<int>();
         _partBonesDic[startBone] = bones;
         bones.Clear();
         Transform current = startBone;
         while (current != null)
         {
-            bones.Add(current);
+            bones.Add(_boneTr2IndexDic[current]);
+            _partBonesList.Add(_boneTr2IndexDic[current]);
             if (current.childCount > 0) current = current.GetChild(0);
             else break;
         }
-
-        //输出每部分包含的骨头
-        string s = string.Empty;
-        s += startBone.name;
-        for(int i = 0; i< bones.Count; i++)
-        {
-            s += "|" + bones[i].name;
-        }
-
-        Debug.LogError("====CollectArmBones:" + s);
 
     }
 
@@ -122,7 +176,7 @@ public class DynamicArmSever : MonoBehaviour
         UpdateBodyMesh(tr);
 
         // 步骤4：添加物理效果
-        AddPhysicsToSeveredArm(severedRoot.gameObject);
+        //AddPhysicsToSeveredArm(severedRoot.gameObject);
 
         // 步骤5：创建伤口
         //CreateWoundEffect(tr);
@@ -134,7 +188,7 @@ public class DynamicArmSever : MonoBehaviour
 
         //_isSevered = true;
     }
-    public static Dictionary<Transform, int> originalBoneIndexMap = new Dictionary<Transform, int>();
+    public static Dictionary<int, int> originalBoneIndexMap = new Dictionary<int, int>();
     Transform DuplicateBoneHierarchy(Transform original)
     {
         originalBoneIndexMap.Clear(); // 清空旧的映射
@@ -189,7 +243,7 @@ public class DynamicArmSever : MonoBehaviour
         foreach (var bone in partBonesList)
         {
             Transform newBone;
-            if (boneMap.TryGetValue(bone, out newBone))
+            if (boneMap.TryGetValue(_boneIndex2TrDic[bone], out newBone))
             {
                 newBoneList.Add(newBone);
             }
@@ -197,7 +251,7 @@ public class DynamicArmSever : MonoBehaviour
 
         for (int i = 0; i < newBoneList.Count; i++)
         {
-            originalBoneIndexMap[partBonesList[i]] = i;
+            originalBoneIndexMap[_partBonesList[i]] = i;
         }
 
         return newRoot.transform;
@@ -216,16 +270,17 @@ public class DynamicArmSever : MonoBehaviour
 
         // 重新绑定骨骼（关键修正）
         List<Transform> newBones = new List<Transform>();
-        foreach (Transform bone in partBonesList)
+        foreach (int boneIndex in partBonesList)
         {
+            var bone = _boneIndex2TrDic[boneIndex];
             // 注意：从newRoot开始查找（包含自身）
             Transform newBone = newRoot.FindDeepChild(bone.name);
 
-            // 调试日志
-            if (newBone == null)
-                Debug.LogError("找不到骨骼:bone.name:" + bone.name);
-            else
-                Debug.Log("成功绑定骨骼:bone.name:" + bone.name);
+            //// 调试日志
+            //if (newBone == null)
+            //    Debug.LogError("找不到骨骼:bone.name:" + bone.name);
+            //else
+            //    Debug.Log("成功绑定骨骼:bone.name:" + bone.name);
 
             newBones.Add(newBone);
         }
@@ -249,15 +304,32 @@ public class DynamicArmSever : MonoBehaviour
         newRoot.gameObject.AddComponent<BoneVisualizer>();
     }
 
+    private List<Vector3> currVertices = new List<Vector3>(2048);
+    // 顶点映射字典（旧索引 -> 新索引）
+    private Dictionary<int, int> vertexMap = new Dictionary<int, int>(2048);
+    private List<Vector3> newVertices = new List<Vector3>(512);
+    private List<BoneWeight> newBoneWeights = new List<BoneWeight>(512);
+    private List<int> newTriangles = new List<int>(2048);
 
-    Mesh ExtractSubMesh(List<Transform> targetBones, Transform newRoot)
+    // 第一步：收集顶点及相关属性
+    private List<Vector2> newUV = new List<Vector2>(512);
+    private List<Vector2> newUV2 = new List<Vector2>(512);
+    private List<Vector2> newUV3 = new List<Vector2>(512);
+    private List<Vector2> newUV4 = new List<Vector2>(512);
+    private List<Color> newColors = new List<Color>(512);
+    Mesh ExtractSubMesh(HashSet<int> targetBones, Transform newRoot)
     {
-        Mesh currentMesh = new Mesh();
-        _bodySMR.BakeMesh(currentMesh);
-        var currVertices = currentMesh.vertices;
+        //bakedMesh.Clear();
+        Mesh bakedMesh = new Mesh();
+        _bodySMR.BakeMesh(bakedMesh);
+        currVertices.Clear();
+        //var currVertices = currentMesh.vertices;
+        bakedMesh.GetVertices(currVertices);
 
+        //newMesh.Clear();
         Mesh newMesh = new Mesh();
-        BoneWeight[] weights = _originalMesh.boneWeights;
+        //BoneWeight[] weights = _originalMesh.boneWeights;
+        var weights = _oriMeshBoneWeights;
 
         //// 获取目标骨骼的索引
         //HashSet<int> targetBoneIndices = new HashSet<int>();
@@ -268,43 +340,44 @@ public class DynamicArmSever : MonoBehaviour
         //}
 
         // 顶点映射字典（旧索引 -> 新索引）
-        Dictionary<int, int> vertexMap = new Dictionary<int, int>(2048);
-        List<Vector3> newVertices = new List<Vector3>(512);
-        List<BoneWeight> newBoneWeights = new List<BoneWeight>(512);
-        List<int> newTriangles = new List<int>(2048);
+        vertexMap.Clear();
+        newVertices.Clear();
+        newBoneWeights.Clear();
+        newTriangles.Clear();
 
         // 第一步：收集顶点及相关属性
-        List<Vector2> newUV = new List<Vector2>(512);
-        List<Vector2> newUV2 = new List<Vector2>(512);
-        List<Vector2> newUV3 = new List<Vector2>(512);
-        List<Vector2> newUV4 = new List<Vector2>(512);
-        List<Color> newColors = new List<Color>(512);
-        var oriUV = _originalMesh.uv;
-        var oriUV2 = _originalMesh.uv2;
-        var oriUV3 = _originalMesh.uv3;
-        var oriUV4 = _originalMesh.uv4;
-        var oriColors = _originalMesh.colors;
-        Dictionary<int, int[]> oriTriangles = new Dictionary<int, int[]>(4);
+        newUV.Clear();
+        newUV2.Clear();
+        newUV3.Clear();
+        newUV4.Clear();
+        newColors.Clear();
+        //var oriUV = _originalMesh.uv;
+        //var oriUV2 = _originalMesh.uv2;
+        //var oriUV3 = _originalMesh.uv3;
+        //var oriUV4 = _originalMesh.uv4;
+        //var oriColors = _originalMesh.colors;
+        //Dictionary<int, int[]> oriTriangles = new Dictionary<int, int[]>(4);
 
         //// 获取坐标转换矩阵
         //Matrix4x4 originalRootWorldMatrix = _bodySMR.rootBone.localToWorldMatrix;
         //Matrix4x4 newRootWorldMatrix = newRoot.localToWorldMatrix;
 
         // 第一步：收集所有相关顶点
-        for (int subMesh = 0; subMesh < _originalMesh.subMeshCount; subMesh++)
+        for (int subMesh = 0; subMesh < _originaleSubmeshCount; subMesh++)
         {
-            int[] triangles = _originalMesh.GetTriangles(subMesh);
-            oriTriangles[subMesh] = triangles;
-            for (int i = 0; i < triangles.Length; i++)
+            //int[] triangles = _originalMesh.GetTriangles(subMesh);
+            //oriTriangles[subMesh] = triangles;
+            var triangles = oriTriangles[subMesh];
+            for (int i = 0; i < triangles.Count; i++)
             {
                 int originalIndex = triangles[i];
                 BoneWeight weight = weights[originalIndex];
 
                 // 检查顶点是否属于目标骨骼
-                bool isTargetVertex = (IsBoneInPart(targetBones, weight.boneIndex0) && weight.weight0 >= boneWeightThreshold) ||
-                                      (IsBoneInPart(targetBones, weight.boneIndex1) && weight.weight1 >= boneWeightThreshold) ||
-                                      (IsBoneInPart(targetBones, weight.boneIndex2) && weight.weight2 >= boneWeightThreshold) ||
-                                      (IsBoneInPart(targetBones, weight.boneIndex3) && weight.weight3 >= boneWeightThreshold);
+                bool isTargetVertex = (weight.weight0 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex0)) ||
+                                      (weight.weight1 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex1)) ||
+                                      (weight.weight2 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex2)) ||
+                                      (weight.weight3 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex3));
 
                 if (isTargetVertex && !vertexMap.ContainsKey(originalIndex))
                 {
@@ -314,7 +387,7 @@ public class DynamicArmSever : MonoBehaviour
                     //Vector3 worldPos = originalRootWorldMatrix.MultiplyPoint3x4(_originalMesh.vertices[originalIndex]);
                     //Vector3 localPos = newRootWorldMatrix.inverse.MultiplyPoint3x4(worldPos);
                     // 获取顶点在世界空间的位置
-                    Vector3 worldPos = _bodySMR.transform.TransformPoint(currVertices[originalIndex]);
+                    Vector3 worldPos = _bodySMRTr.TransformPoint(currVertices[originalIndex]);
                     //Vector3 vertexPos = _originalMesh.vertices[originalIndex];
 
                     //// 计算加权后的世界位置
@@ -351,28 +424,28 @@ public class DynamicArmSever : MonoBehaviour
                     newBoneWeights.Add(newWeight);
 
                     // 收集UV和颜色
-                    if (oriUV.Length > originalIndex)
-                        newUV.Add(oriUV[originalIndex]);
-                    if (oriUV2.Length > originalIndex)
-                        newUV2.Add(oriUV2[originalIndex]);
-                    if (oriUV3.Length > originalIndex)
-                        newUV3.Add(oriUV2[originalIndex]);
-                    if (oriUV4.Length > originalIndex)
-                        newUV4.Add(oriUV4[originalIndex]);
-                    if (oriColors.Length > originalIndex)
-                        newColors.Add(oriColors[originalIndex]);
+                    if (_oriUVs.Count > originalIndex)
+                        newUV.Add(_oriUVs[originalIndex]);
+                    if (_oriUVs2.Count > originalIndex)
+                        newUV2.Add(_oriUVs2[originalIndex]);
+                    if (_oriUVs3.Count > originalIndex)
+                        newUV3.Add(_oriUVs3[originalIndex]);
+                    if (_oriUVs4.Count > originalIndex)
+                        newUV4.Add(_oriUVs4[originalIndex]);
+                    if (_oriColors.Count > originalIndex)
+                        newColors.Add(_oriColors[originalIndex]);
                 }
             }
         }
 
         // 第二步：重新构建三角形
-        for (int subMesh = 0; subMesh < _originalMesh.subMeshCount; subMesh++)
+        for (int subMesh = 0; subMesh < _originaleSubmeshCount; subMesh++)
         {
-            int[] triangles = oriTriangles[subMesh];
-            for (int i = 0; i < triangles.Length; i += 3)
+            var triangles = oriTriangles[subMesh];
+            for (int i = 0; i < triangles.Count; i += 3)
             {
                 // 必须三个顶点都有效
-                if (i + 2 >= triangles.Length) continue;
+                if (i + 2 >= triangles.Count) continue;
 
                 int i0 = triangles[i];
                 int i1 = triangles[i + 1];
@@ -450,18 +523,19 @@ public class DynamicArmSever : MonoBehaviour
         if (originalBoneIndex < 0 || originalBoneIndex >= _originalBones.Length)
             return 0;
 
-        Transform originalBone = _originalBones[originalBoneIndex];
-        if (originalBoneIndexMap.ContainsKey(originalBone))
-            return originalBoneIndexMap[originalBone];
+        //Transform originalBone = _originalBones[originalBoneIndex];
+        if (originalBoneIndexMap.ContainsKey(originalBoneIndex))
+            return originalBoneIndexMap[originalBoneIndex];
 
         return 0; // 默认指向根骨骼
     }
 
     // 新增辅助方法
-    bool IsBoneInPart(List<Transform> partBonesList, int boneIndex)
+    bool IsBoneInPart(HashSet<int> partBonesList, int boneIndex)
     {
         if (boneIndex < 0 || boneIndex >= _originalBones.Length) return false;
-        return partBonesList.Contains(_originalBones[boneIndex]);
+        //return partBonesList.Contains(boneIndex);
+        return partBonesList.Contains(boneIndex);
     }
     void UpdateBodyMesh(Transform original)
     {
@@ -489,10 +563,10 @@ public class DynamicArmSever : MonoBehaviour
                     int index = triangles[i + j];
                     BoneWeight w = boneWeights[index];
 
-                    bool isPartOfArm = (IsBoneInPart(partBonesList, w.boneIndex0) && w.weight0 >= boneWeightThreshold) ||
-                                        (IsBoneInPart(partBonesList, w.boneIndex1) && w.weight1 >= boneWeightThreshold) ||
-                                        (IsBoneInPart(partBonesList, w.boneIndex2) && w.weight2 >= boneWeightThreshold) ||
-                                        (IsBoneInPart(partBonesList, w.boneIndex3) && w.weight3 >= boneWeightThreshold);
+                    bool isPartOfArm = (w.weight0 >= boneWeightThreshold && IsBoneInPart(partBonesList, w.boneIndex0)) ||
+                                        (w.weight1 >= boneWeightThreshold && IsBoneInPart(partBonesList, w.boneIndex1)) ||
+                                        (w.weight2 >= boneWeightThreshold && IsBoneInPart(partBonesList, w.boneIndex2)) ||
+                                        (w.weight3 >= boneWeightThreshold && IsBoneInPart(partBonesList, w.boneIndex3));
                     if (isPartOfArm)
                     {
                         keepTriangle = false; // 该顶点属于目标骨骼，标记三角形为可剔除
@@ -529,6 +603,7 @@ public class DynamicArmSever : MonoBehaviour
         GetComponent<Animation>().Play();
 
         _originalMesh = newBodyMesh;
+        GetOriginalInfos();
     }
 
     void AddPhysicsToSeveredArm(GameObject severedArm)

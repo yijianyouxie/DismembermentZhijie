@@ -24,6 +24,7 @@ Shader "TLStudio/Character/Character" {
                 "LightMode"="ForwardBase"
             }
             ColorMask RGBA
+			Cull Off
 			Stencil
 			{
 				Ref 2         // 写入Stencil的值为1
