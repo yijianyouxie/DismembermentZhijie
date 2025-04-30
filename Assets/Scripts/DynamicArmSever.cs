@@ -13,6 +13,7 @@ public class DynamicArmSever : MonoBehaviour
 
     private SkinnedMeshRenderer _bodySMR;
     private Transform _bodySMRTr;
+    private Material[] _bodySMRSharedMaterials;
     [SerializeField]
     private AnimationClip _idleAnimation;
     private Mesh _originalMesh;
@@ -24,17 +25,21 @@ public class DynamicArmSever : MonoBehaviour
     //private Material[] _severedMaterials;
     //private bool _isSevered;
     private Dictionary<Transform, HashSet<int>> _partBonesDic = new Dictionary<Transform, HashSet<int>>(4);
+    private Dictionary<Transform, Transform[]> _partBonesTrDic = new Dictionary<Transform, Transform[]>(4);
     private HashSet<int> partSeverdSet = new HashSet<int>();
     private List<int> _partBonesList = new List<int>(8);
     private float boneWeightThreshold = 0.3f;
 
     private Mesh bakedMesh;
     private Dictionary<Transform, Mesh> newMeshDic = new Dictionary<Transform, Mesh>(4);
+    private Dictionary<Transform, SkinnedMeshRenderer> smrDic = new Dictionary<Transform, SkinnedMeshRenderer>(4);
+    private Dictionary<Transform, Transform> smrTrDic = new Dictionary<Transform, Transform>(4);
 
     void Start()
     {
         _bodySMR = GetComponentInChildren<SkinnedMeshRenderer>();
         _bodySMRTr = _bodySMR.transform;
+        _bodySMRSharedMaterials = _bodySMR.sharedMaterials;
         _originalMesh = Instantiate(_bodySMR.sharedMesh); // 创建网格副本
         GetOriginalInfos();
         //_originalBodyMesh = _bodySMR.sharedMesh;
@@ -61,6 +66,12 @@ public class DynamicArmSever : MonoBehaviour
             {
                 CollectPartBones(tr);
             }
+
+            GameObject obj = new GameObject("Skin");
+            var smr = obj.AddComponent<SkinnedMeshRenderer>();
+            obj.SetActive(false);
+            smrDic[tr] = smr;
+            smrTrDic[tr] = smr.transform;
         }
 
         bakedMesh = new Mesh();
@@ -165,6 +176,16 @@ public class DynamicArmSever : MonoBehaviour
             if (current.childCount > 0) current = current.GetChild(0);
             else break;
         }
+        //获取长度后，开辟数组
+        var bonesLen = bones.Count;
+        var bonesArray = new Transform[bonesLen];
+        var index = 0;
+        foreach(var i in bones)
+        {
+            bonesArray[index] = _boneIndex2TrDic[i];
+            index++;
+        }
+        _partBonesTrDic[startBone] = bonesArray;
 
         var newMesh = new Mesh();
         //预先赋值，消除后续extractmesh的gc开销
@@ -280,50 +301,64 @@ public class DynamicArmSever : MonoBehaviour
 
     void CreateSeveredArmMesh(Transform original, Transform newRoot)
     {
+        //UnityEngine.Profiling.Profiler.BeginSample("====CreateSeveredArmMesh,partBonesList");
         var partBonesList = _partBonesDic[original];
         var newMesh = newMeshDic[original];
+        //UnityEngine.Profiling.Profiler.EndSample();
+        //var partBoneTrArray = _partBonesTrDic[original];
+        //UnityEngine.Profiling.Profiler.BeginSample("====CreateSeveredArmMesh,ExtractSubMesh");
         // 获取手臂部分的网格数据
         Mesh severedMesh = ExtractSubMesh(partBonesList, newRoot, newMesh);
+        //UnityEngine.Profiling.Profiler.EndSample();
 
+        //UnityEngine.Profiling.Profiler.BeginSample("====CreateSeveredArmMesh,AddComponent");
         // 创建新渲染器
-        SkinnedMeshRenderer newSMR = newRoot.gameObject.AddComponent<SkinnedMeshRenderer>();
+        SkinnedMeshRenderer newSMR = smrDic[original];// newRoot.gameObject.AddComponent<SkinnedMeshRenderer>();
+        newSMR.gameObject.SetActive(true);
+        smrTrDic[original].SetParent(newRoot, false);
+        //newSMR.transform.localPosition = Vector3.zero;
+        //newSMR.transform.localRotation = Quaternion.identity;
+
         newSMR.sharedMesh = severedMesh;
-        newSMR.materials = _bodySMR.materials;
+        //newSMR.materials = _bodySMR.materials;
+        //UnityEngine.Profiling.Profiler.EndSample();
 
-        // 重新绑定骨骼（关键修正）
-        List<Transform> newBones = new List<Transform>();
-        foreach (int boneIndex in partBonesList)
-        {
-            var bone = _boneIndex2TrDic[boneIndex];
-            // 注意：从newRoot开始查找（包含自身）
-            Transform newBone = newRoot.FindDeepChild(bone.name);
+        //// 重新绑定骨骼（关键修正）
+        //List<Transform> newBones = new List<Transform>();
+        //foreach (int boneIndex in partBonesList)
+        //{
+        //    var bone = _boneIndex2TrDic[boneIndex];
+        //    // 注意：从newRoot开始查找（包含自身）
+        //    Transform newBone = newRoot.FindDeepChild(bone.name);
 
-            //// 调试日志
-            //if (newBone == null)
-            //    Debug.LogError("找不到骨骼:bone.name:" + bone.name);
-            //else
-            //    Debug.Log("成功绑定骨骼:bone.name:" + bone.name);
+        //    //// 调试日志
+        //    //if (newBone == null)
+        //    //    Debug.LogError("找不到骨骼:bone.name:" + bone.name);
+        //    //else
+        //    //    Debug.Log("成功绑定骨骼:bone.name:" + bone.name);
 
-            newBones.Add(newBone);
-        }
+        //    newBones.Add(newBone);
+        //}
 
-        // 重新计算绑定姿势
-        Matrix4x4[] bindPoses = new Matrix4x4[newBones.Count];
-        for (int i = 0; i < newBones.Count; i++)
-        {
-            // 计算相对根骨骼的变换矩阵
-            bindPoses[i] = newBones[i].worldToLocalMatrix * newRoot.localToWorldMatrix;
-        }
-        severedMesh.bindposes = bindPoses;
+        //// 重新计算绑定姿势
+        //Matrix4x4[] bindPoses = new Matrix4x4[newBones.Count];
+        //for (int i = 0; i < newBones.Count; i++)
+        //{
+        //    // 计算相对根骨骼的变换矩阵
+        //    bindPoses[i] = newBones[i].worldToLocalMatrix * newRoot.localToWorldMatrix;
+        //}
+        //severedMesh.bindposes = bindPoses;
 
-        newSMR.bones = newBones.ToArray();
-        newSMR.rootBone = newBones[0];
+        //newSMR.bones = newBones.ToArray();
+        //newSMR.rootBone = newBones[0];
+        //UnityEngine.Profiling.Profiler.BeginSample("====CreateSeveredArmMesh,sharedMaterials");
         // 修改材质设置方式
         //newSMR.sharedMaterials = _severedMaterials;
-        newSMR.sharedMaterials = _bodySMR.sharedMaterials;
+        newSMR.sharedMaterials = _bodySMRSharedMaterials;
+        //UnityEngine.Profiling.Profiler.EndSample();
 
-        // 添加调试可视化
-        newRoot.gameObject.AddComponent<BoneVisualizer>();
+        //// 添加调试可视化
+        //newRoot.gameObject.AddComponent<BoneVisualizer>();
     }
 
     private List<Vector3> currVertices = new List<Vector3>(2048);
@@ -393,10 +428,10 @@ public class DynamicArmSever : MonoBehaviour
             var trianglesCount = triangles.Count;
             for (int i = 0; i < trianglesCount; i++)
             {
-                UnityEngine.Profiling.Profiler.BeginSample("====triangles");
+                //UnityEngine.Profiling.Profiler.BeginSample("====triangles");
                 int originalIndex = triangles[i];
                 BoneWeight weight = weights[originalIndex];
-                UnityEngine.Profiling.Profiler.EndSample();
+                //UnityEngine.Profiling.Profiler.EndSample();
 
                 // 检查顶点是否属于目标骨骼
                 bool isTargetVertex = (weight.weight0 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex0)) ||
@@ -406,7 +441,7 @@ public class DynamicArmSever : MonoBehaviour
 
                 if (isTargetVertex && !vertexMap.ContainsKey(originalIndex))
                 {
-                    UnityEngine.Profiling.Profiler.BeginSample("====isTargetVertex");
+                    //UnityEngine.Profiling.Profiler.BeginSample("====isTargetVertex");
                     //Debug.LogError(string.Format("====权重{0}|{1}|{2}|{3}", weight.weight0, weight.weight1, weight.weight2, weight.weight3));
                     //Debug.LogError(string.Format("====Bone{0}|{1}|{2}|{3}", _originalBones[weight.boneIndex0].name, _originalBones[weight.boneIndex1].name, _originalBones[weight.boneIndex2].name, _originalBones[weight.boneIndex3].name));
                     //// 坐标转换
@@ -460,7 +495,7 @@ public class DynamicArmSever : MonoBehaviour
                     //    newUV4.Add(_oriUVs4[originalIndex]);
                     //if (_oriColorsCount > originalIndex)
                     //    newColors.Add(_oriColors[originalIndex]);
-                    UnityEngine.Profiling.Profiler.EndSample();
+                    //UnityEngine.Profiling.Profiler.EndSample();
                 }
             }
         }
@@ -468,7 +503,7 @@ public class DynamicArmSever : MonoBehaviour
         // 第二步：重新构建三角形
         for (int subMesh = 0; subMesh < _originaleSubmeshCount; subMesh++)
         {
-            UnityEngine.Profiling.Profiler.BeginSample("====triangles2");
+            //UnityEngine.Profiling.Profiler.BeginSample("====triangles2");
             var triangles = oriTriangles[subMesh];
             var trianglesCount = triangles.Count;
             for (int i = 0; i < trianglesCount; i += 3)
@@ -489,7 +524,7 @@ public class DynamicArmSever : MonoBehaviour
                     newTriangles.Add(i2);
                 }
             }
-            UnityEngine.Profiling.Profiler.EndSample();
+            //UnityEngine.Profiling.Profiler.EndSample();
         }
 
         //// 设置网格数据
@@ -653,7 +688,7 @@ public class DynamicArmSever : MonoBehaviour
 
         MeshCollider collider = severedArm.AddComponent<MeshCollider>();
         collider.convex = true;
-        collider.sharedMesh = severedArm.GetComponent<SkinnedMeshRenderer>().sharedMesh;
+        collider.sharedMesh = severedArm.GetComponentInChildren<SkinnedMeshRenderer>().sharedMesh;
 
         //severedArm.AddComponent<BoneFreezer>();
     }
@@ -695,6 +730,11 @@ public class DynamicArmSever : MonoBehaviour
         mesh.RecalculateNormals();
 
         return mesh;
+    }
+
+    private void OnDestroy()
+    {
+        
     }
 }
 
