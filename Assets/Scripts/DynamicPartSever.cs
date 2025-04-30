@@ -2,7 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 
 [RequireComponent(typeof(Animation))]
-public class DynamicArmSever : MonoBehaviour
+public class DynamicPartSever : MonoBehaviour
 {
     [Header("Settings")]
     //[SerializeField] private Transform _shoulderBone;  // 肩膀骨骼（分离点）
@@ -65,10 +65,7 @@ public class DynamicArmSever : MonoBehaviour
             _boneTr2IndexDic[_originalBones[i]] = i;
             _boneIndex2TrDic[i] = _originalBones[i];
         }
-
-        //// 预先记录手臂骨骼链
-        //CollectArmBones(_shoulderBone);
-        //CollectArmBones(_headBone);
+        
         Transform tr;
         for(int i = 0; i < dismemberBoneList.Count; i++)
         {
@@ -157,7 +154,7 @@ public class DynamicArmSever : MonoBehaviour
             {
                 return;
             }
-            SeverArm(dismemberBoneList[0]);
+            SeverPart(dismemberBoneList[0]);
             partSeverdSet.Add(0);
         }
 
@@ -167,7 +164,7 @@ public class DynamicArmSever : MonoBehaviour
             {
                 return;
             }
-            SeverArm(dismemberBoneList[1]);
+            SeverPart(dismemberBoneList[1]);
             partSeverdSet.Add(1);
         }
         if (Input.GetKeyDown(KeyCode.D))
@@ -176,7 +173,7 @@ public class DynamicArmSever : MonoBehaviour
             {
                 return;
             }
-            SeverArm(dismemberBoneList[2]);
+            SeverPart(dismemberBoneList[2]);
             partSeverdSet.Add(2);
         }
     }
@@ -220,7 +217,7 @@ public class DynamicArmSever : MonoBehaviour
         newMeshDic[startBone] = newMesh;
     }
 
-    public void SeverArm(Transform tr)
+    public void SeverPart(Transform tr)
     {
         //if (_isSevered) return;
 
@@ -231,13 +228,13 @@ public class DynamicArmSever : MonoBehaviour
         Transform severedRoot = DuplicateBoneHierarchy(tr);
 
         // 步骤2：创建手臂网格
-        CreateSeveredArmMesh(tr, severedRoot);
+        CreateSeveredPartMesh(tr, severedRoot);
 
         // 步骤3：更新身体网格
         UpdateBodyMesh(tr);
 
         // 步骤4：添加物理效果
-        AddPhysicsToSeveredArm(severedRoot.gameObject);
+        AddPhysicsToSeveredPart(severedRoot.gameObject);
 
         // 步骤5：创建伤口
         //CreateWoundEffect(tr);
@@ -359,19 +356,16 @@ public class DynamicArmSever : MonoBehaviour
         return newRootTr;
     }
 
-    void CreateSeveredArmMesh(Transform original, Transform newRoot)
+    void CreateSeveredPartMesh(Transform original, Transform newRoot)
     {
-        //UnityEngine.Profiling.Profiler.BeginSample("====CreateSeveredArmMesh,partBonesList");
         var partBonesList = _partBonesDic[original];
         var newMesh = newMeshDic[original];
-        //UnityEngine.Profiling.Profiler.EndSample();
+
         //var partBoneTrArray = _partBonesTrDic[original];
-        //UnityEngine.Profiling.Profiler.BeginSample("====CreateSeveredArmMesh,ExtractSubMesh");
+
         // 获取手臂部分的网格数据
         Mesh severedMesh = ExtractSubMesh(partBonesList, newRoot, newMesh);
-        //UnityEngine.Profiling.Profiler.EndSample();
 
-        //UnityEngine.Profiling.Profiler.BeginSample("====CreateSeveredArmMesh,AddComponent");
         // 创建新渲染器
         SkinnedMeshRenderer newSMR = smrDic[original];// newRoot.gameObject.AddComponent<SkinnedMeshRenderer>();
         newSMR.gameObject.SetActive(true);
@@ -381,7 +375,6 @@ public class DynamicArmSever : MonoBehaviour
 
         newSMR.sharedMesh = severedMesh;
         //newSMR.materials = _bodySMR.materials;
-        //UnityEngine.Profiling.Profiler.EndSample();
 
         //// 重新绑定骨骼（关键修正）
         //List<Transform> newBones = new List<Transform>();
@@ -411,11 +404,10 @@ public class DynamicArmSever : MonoBehaviour
 
         //newSMR.bones = newBones.ToArray();
         //newSMR.rootBone = newBones[0];
-        //UnityEngine.Profiling.Profiler.BeginSample("====CreateSeveredArmMesh,sharedMaterials");
+
         // 修改材质设置方式
         //newSMR.sharedMaterials = _severedMaterials;
         newSMR.sharedMaterials = _bodySMRSharedMaterials;
-        //UnityEngine.Profiling.Profiler.EndSample();
 
         //// 添加调试可视化
         //newRoot.gameObject.AddComponent<BoneVisualizer>();
@@ -697,11 +689,11 @@ public class DynamicArmSever : MonoBehaviour
                     int index = triangles[i + j];
                     BoneWeight w = boneWeights[index];
 
-                    bool isPartOfArm = (w.weight0 >= boneWeightThreshold && IsBoneInPart(partBonesList, w.boneIndex0)) ||
+                    bool isPart = (w.weight0 >= boneWeightThreshold && IsBoneInPart(partBonesList, w.boneIndex0)) ||
                                         (w.weight1 >= boneWeightThreshold && IsBoneInPart(partBonesList, w.boneIndex1)) ||
                                         (w.weight2 >= boneWeightThreshold && IsBoneInPart(partBonesList, w.boneIndex2)) ||
                                         (w.weight3 >= boneWeightThreshold && IsBoneInPart(partBonesList, w.boneIndex3));
-                    if (isPartOfArm)
+                    if (isPart)
                     {
                         keepTriangle = false; // 该顶点属于目标骨骼，标记三角形为可剔除
                     }
@@ -740,17 +732,17 @@ public class DynamicArmSever : MonoBehaviour
         GetOriginalInfos();
     }
 
-    void AddPhysicsToSeveredArm(GameObject severedArm)
+    void AddPhysicsToSeveredPart(GameObject severedPart)
     {
-        Rigidbody rb = severedArm.AddComponent<Rigidbody>();
+        Rigidbody rb = severedPart.AddComponent<Rigidbody>();
         rb.mass = 3f;
         rb.AddForce(Random.onUnitSphere * _severForce, ForceMode.Impulse);
 
-        MeshCollider collider = severedArm.AddComponent<MeshCollider>();
+        MeshCollider collider = severedPart.AddComponent<MeshCollider>();
         collider.convex = true;
-        collider.sharedMesh = severedArm.GetComponentInChildren<SkinnedMeshRenderer>().sharedMesh;
+        collider.sharedMesh = severedPart.GetComponentInChildren<SkinnedMeshRenderer>().sharedMesh;
 
-        //severedArm.AddComponent<BoneFreezer>();
+        //severedPart.AddComponent<BoneFreezer>();
     }
 
     void CreateWoundEffect(Transform original)
