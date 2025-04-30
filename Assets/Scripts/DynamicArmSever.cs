@@ -14,26 +14,37 @@ public class DynamicArmSever : MonoBehaviour
     private SkinnedMeshRenderer _bodySMR;
     private Transform _bodySMRTr;
     private Material[] _bodySMRSharedMaterials;
-    [SerializeField]
-    private AnimationClip _idleAnimation;
+    //[SerializeField]
+    //private AnimationClip _idleAnimation;
     private Mesh _originalMesh;
     //private Mesh _originalBodyMesh;
     private Transform _originalRootBone;
     private Transform[] _originalBones;
+    //整个骨骼的tr和index字典
     private Dictionary<Transform, int> _boneTr2IndexDic = new Dictionary<Transform, int>(32);
     private Dictionary<int, Transform> _boneIndex2TrDic = new Dictionary<int, Transform>(32);
     //private Material[] _severedMaterials;
     //private bool _isSevered;
+
+    //value表示的是，此肢解部分的各个骨骼在原整体骨骼中的index
     private Dictionary<Transform, HashSet<int>> _partBonesDic = new Dictionary<Transform, HashSet<int>>(4);
+    //value表示的是，此肢解部分的各个骨骼
     private Dictionary<Transform, Transform[]> _partBonesTrDic = new Dictionary<Transform, Transform[]>(4);
+    //此部分是否被肢解的标记
     private HashSet<int> partSeverdSet = new HashSet<int>();
-    private List<int> _partBonesList = new List<int>(8);
+    //各个部分的骨头在原骨骼中的index
+    private List<int> _partBonesOriIndexList = new List<int>(8);
     private float boneWeightThreshold = 0.3f;
 
+    //新建肢解部分的时候用到
     private Mesh bakedMesh;
     private Dictionary<Transform, Mesh> newMeshDic = new Dictionary<Transform, Mesh>(4);
     private Dictionary<Transform, SkinnedMeshRenderer> smrDic = new Dictionary<Transform, SkinnedMeshRenderer>(4);
     private Dictionary<Transform, Transform> smrTrDic = new Dictionary<Transform, Transform>(4);
+
+    //复制骨头的时候用到
+    private Queue<GameObject> newBoneGOQueue = new Queue<GameObject>(8);
+    private Dictionary<GameObject, Transform> newBoneGO2Tr = new Dictionary<GameObject, Transform>(8);
 
     void Start()
     {
@@ -75,6 +86,14 @@ public class DynamicArmSever : MonoBehaviour
         }
 
         bakedMesh = new Mesh();
+
+        GameObject newBone;
+        for(int i = 0; i < 8; i++)
+        {
+            newBone = new GameObject();
+            newBoneGOQueue.Enqueue(newBone);
+            newBoneGO2Tr[newBone] = newBone.transform;
+        }
     }
     private List<BoneWeight> _oriMeshBoneWeights = new List<BoneWeight>(1024);
     private List<Vector2> _oriUVs = new List<Vector2>(512);
@@ -172,7 +191,7 @@ public class DynamicArmSever : MonoBehaviour
         while (current != null)
         {
             bones.Add(_boneTr2IndexDic[current]);
-            _partBonesList.Add(_boneTr2IndexDic[current]);
+            _partBonesOriIndexList.Add(_boneTr2IndexDic[current]);
             if (current.childCount > 0) current = current.GetChild(0);
             else break;
         }
@@ -230,35 +249,66 @@ public class DynamicArmSever : MonoBehaviour
 
         //_isSevered = true;
     }
-    public static Dictionary<int, int> originalBoneIndexMap = new Dictionary<int, int>();
+
+    private GameObject GetNewBone()
+    {
+        if(newBoneGOQueue.Count > 0)
+        {
+            return newBoneGOQueue.Dequeue();
+        }else
+        {
+            return new GameObject();
+        }
+    }
+    private void RecycleNewBone(GameObject newBone)
+    {
+        if(null != newBone)
+        {
+            newBoneGOQueue.Enqueue(newBone);
+        }
+    }
+    //key是原始整个骨骼里的索引，value是在新骨骼中的索引
+    public static Dictionary<int, int> partOriginalBoneIndexMap = new Dictionary<int, int>(8);
+    private Dictionary<Transform, Transform> boneMap = new Dictionary<Transform, Transform>(8);
+    private Stack<Transform> stack = new Stack<Transform>(2);
+    private List<Transform> newBoneList = new List<Transform>(8);
     Transform DuplicateBoneHierarchy(Transform original)
     {
-        originalBoneIndexMap.Clear(); // 清空旧的映射
+        //UnityEngine.Profiling.Profiler.BeginSample("====DuplicateBoneHierarchy1");
+        partOriginalBoneIndexMap.Clear(); // 清空旧的映射
 
-        GameObject newRoot = new GameObject(original.name); // 保持相同名称
+        //GameObject newRoot = new GameObject(original.name); // 保持相同名称
+        GameObject newRoot = GetNewBone();
         //newRoot.transform.SetPositionAndRotation(original.position, original.rotation);
         //Debug.LogError("====original.position:"+ original.position + " newRoot.transform:"+ newRoot.transform.position);
         // 使用当前动画姿势的位置和旋转
-        newRoot.transform.position = original.position;
-        newRoot.transform.rotation = original.rotation;
-        newRoot.transform.localScale = original.localScale;
+        var newRootTr = newBoneGO2Tr[newRoot];
+        newRootTr.position = original.position;
+        newRootTr.rotation = original.rotation;
+        newRootTr.localScale = original.localScale;
 
         // 使用字典映射原始骨骼和新骨骼
-        Dictionary<Transform, Transform> boneMap = new Dictionary<Transform, Transform>();
-        boneMap.Add(original, newRoot.transform);
+        boneMap.Clear();
+        boneMap.Add(original, newRootTr);
 
         // 使用栈进行非递归遍历
-        Stack<Transform> stack = new Stack<Transform>();
+        stack.Clear();
         stack.Push(original);
+        //UnityEngine.Profiling.Profiler.EndSample();
 
+        //UnityEngine.Profiling.Profiler.BeginSample("====DuplicateBoneHierarchy2");
         while (stack.Count > 0)
         {
             Transform current = stack.Pop();
-
-            foreach (Transform child in current)
+            var childLen = current.childCount;
+            //foreach (Transform child in current)
+            for(int i = 0; i < childLen; i++)
             {
+                var child = current.GetChild(i);
                 // 创建新骨骼
-                GameObject newBone = new GameObject(child.name);
+
+                GameObject newBone = GetNewBone();
+                var newBoneTr = newBoneGO2Tr[newBone];
                 //newBone.transform.SetParent(boneMap[current]);
                 ////newBone.transform.SetLocalPositionAndRotation(child.localPosition, child.localRotation);
                 //newBone.transform.localPosition = child.localPosition;
@@ -269,18 +319,18 @@ public class DynamicArmSever : MonoBehaviour
                 //newBone.transform.rotation = child.rotation;
                 //Debug.LogError("====child.position:" + child.position + " newBone.transform.position:" + newBone.transform.position);
                 // 使用当前动画姿势的局部变换
-                newBone.transform.SetParent(boneMap[current], false);
-                newBone.transform.localPosition = child.localPosition;
-                newBone.transform.localRotation = child.localRotation;
-                newBone.transform.localScale = child.localScale;
+                newBoneTr.SetParent(boneMap[current], false);
+                newBoneTr.localPosition = child.localPosition;
+                newBoneTr.localRotation = child.localRotation;
+                newBoneTr.localScale = child.localScale;
 
-                boneMap.Add(child, newBone.transform);
+                boneMap.Add(child, newBoneTr);
                 stack.Push(child);
             }
         }
 
         // 在遍历骨骼时记录索引
-        List<Transform> newBoneList = new List<Transform>();
+        newBoneList.Clear();
         var partBonesList = _partBonesDic[original];
         foreach (var bone in partBonesList)
         {
@@ -291,12 +341,22 @@ public class DynamicArmSever : MonoBehaviour
             }
         }
 
-        for (int i = 0; i < newBoneList.Count; i++)
+        var newBoneListLen = newBoneList.Count;
+        for (int i = 0; i < newBoneListLen; i++)
         {
-            originalBoneIndexMap[_partBonesList[i]] = i;
+            partOriginalBoneIndexMap[_partBonesOriIndexList[i]] = i;
         }
 
-        return newRoot.transform;
+        Transform tr;
+        foreach (var item in boneMap)
+        {
+            tr = item.Value;
+            RecycleNewBone(tr.gameObject);
+        }
+        boneMap.Clear();
+
+        //UnityEngine.Profiling.Profiler.EndSample();
+        return newRootTr;
     }
 
     void CreateSeveredArmMesh(Transform original, Transform newRoot)
@@ -598,8 +658,8 @@ public class DynamicArmSever : MonoBehaviour
             return 0;
 
         //Transform originalBone = _originalBones[originalBoneIndex];
-        if (originalBoneIndexMap.ContainsKey(originalBoneIndex))
-            return originalBoneIndexMap[originalBoneIndex];
+        if (partOriginalBoneIndexMap.ContainsKey(originalBoneIndex))
+            return partOriginalBoneIndexMap[originalBoneIndex];
 
         return 0; // 默认指向根骨骼
     }
