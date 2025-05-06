@@ -454,7 +454,8 @@ public class DynamicPartSever : MonoBehaviour
 
     private List<Vector3> currVertices = new List<Vector3>(2048);
     // 顶点映射字典（旧索引 -> 新索引）
-    private Dictionary<int, int> vertexMap = new Dictionary<int, int>(2048);
+    //private Dictionary<int, int> vertexMap = new Dictionary<int, int>(2048);
+    private int[] vertexMap = new int[2048];
     private List<Vector3> newVertices = new List<Vector3>(512);
     private List<BoneWeight> newBoneWeights = new List<BoneWeight>(512);
     private List<int> newTriangles = new List<int>(2048);
@@ -488,7 +489,8 @@ public class DynamicPartSever : MonoBehaviour
         //}
 
         // 顶点映射字典（旧索引 -> 新索引）
-        vertexMap.Clear();
+        //vertexMap.Clear();
+        vertexMap.SetAll<int>(-1);
         newVertices.Clear();
         newBoneWeights.Clear();
         newTriangles.Clear();
@@ -534,7 +536,8 @@ public class DynamicPartSever : MonoBehaviour
                 //                      (weight.weight3 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex3));
                 bool isTargetVertex = triOriIndexHash.ContainsKey(originalIndex);
 
-                if (isTargetVertex && !vertexMap.ContainsKey(originalIndex))
+                //if (isTargetVertex && !vertexMap.ContainsKey(originalIndex))
+                if (isTargetVertex && vertexMap[originalIndex] <= 0)
                 {
                     //UnityEngine.Profiling.Profiler.BeginSample("====isTargetVertex");
                     //Debug.LogError(string.Format("====权重{0}|{1}|{2}|{3}", weight.weight0, weight.weight1, weight.weight2, weight.weight3));
@@ -610,13 +613,24 @@ public class DynamicPartSever : MonoBehaviour
                 int i1 = triangles[i + 1];
                 int i2 = triangles[i + 2];
 
-                if (vertexMap.TryGetValue(i0, out i0) &&
-                    vertexMap.TryGetValue(i1, out i1) &&
-                    vertexMap.TryGetValue(i2, out i2))
+                //if (vertexMap.TryGetValue(i0, out i0) &&
+                //    vertexMap.TryGetValue(i1, out i1) &&
+                //    vertexMap.TryGetValue(i2, out i2))
+                //{
+                //    newTriangles.Add(i0);
+                //    newTriangles.Add(i1);
+                //    newTriangles.Add(i2);
+                //}
+                var bi0 = vertexMap[i0];
+                var bi1 = vertexMap[i1];
+                var bi2 = vertexMap[i2];
+                if (bi0 >= 0 &&
+                    bi1 >= 0 &&
+                    bi2 >= 0)
                 {
-                    newTriangles.Add(i0);
-                    newTriangles.Add(i1);
-                    newTriangles.Add(i2);
+                    newTriangles.Add(bi0);
+                    newTriangles.Add(bi1);
+                    newTriangles.Add(bi2);
                 }
             }
             //UnityEngine.Profiling.Profiler.EndSample();
@@ -912,5 +926,16 @@ public static class TransformExtensions
             path = t.name + "/" + path;
         }
         return path;
+    }
+}
+
+public static class ArrayExtensions
+{
+    public static void SetAll<T>(this T[] array, T value)
+    {
+        for (int i = 0; i < array.Length; i++)
+        {
+            array[i] = value;
+        }
     }
 }
