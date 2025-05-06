@@ -46,8 +46,12 @@ public class DynamicPartSever : MonoBehaviour
     private Queue<GameObject> newBoneGOQueue = new Queue<GameObject>(8);
     private Dictionary<GameObject, Transform> newBoneGO2Tr = new Dictionary<GameObject, Transform>(8);
 
+    //key，此部分；value：此部分下的三角形顶点索引hash
+    private Dictionary<Transform, Dictionary<int, int>> partTr2TriIndexHashDic = new Dictionary<Transform, Dictionary<int, int>>(4);
+
     void Start()
     {
+        UnityEngine.Profiling.Profiler.BeginSample("====Start");
         _bodySMR = GetComponentInChildren<SkinnedMeshRenderer>();
         _bodySMRTr = _bodySMR.transform;
         _bodySMRSharedMaterials = _bodySMR.sharedMaterials;
@@ -91,9 +95,11 @@ public class DynamicPartSever : MonoBehaviour
             newBoneGOQueue.Enqueue(newBone);
             newBoneGO2Tr[newBone] = newBone.transform;
         }
+
+        UnityEngine.Profiling.Profiler.EndSample();
     }
-    private List<BoneWeight> _oriMeshBoneWeights = new List<BoneWeight>(1024);
-    private List<Vector2> _oriUVs = new List<Vector2>(512);
+    private List<BoneWeight> _oriMeshBoneWeights = new List<BoneWeight>(2048);
+    private List<Vector2> _oriUVs = new List<Vector2>(2048);
     //private List<Vector2> _oriUVs2 = new List<Vector2>(512);
     //private List<Vector2> _oriUVs3 = new List<Vector2>(512);
     //private List<Vector2> _oriUVs4 = new List<Vector2>(512);
@@ -129,6 +135,7 @@ public class DynamicPartSever : MonoBehaviour
         //_oriColorsCount = _oriColors.Count;
 
         _originaleSubmeshCount = _originalMesh.subMeshCount;
+        UnityEngine.Profiling.Profiler.BeginSample("====GetOriginalInfos2");
         List<int> subTriangles;
         for (int subMesh = 0; subMesh < _originaleSubmeshCount; subMesh++)
         {
@@ -139,11 +146,12 @@ public class DynamicPartSever : MonoBehaviour
             }
             else
             {
-                subTriangles = new List<int>(512);
+                subTriangles = new List<int>(8192);
                 _originalMesh.GetTriangles(subTriangles, subMesh);
                 oriTriangles[subMesh] = subTriangles;
             }            
         }
+        UnityEngine.Profiling.Profiler.EndSample();
     }
 
     void LateUpdate()
@@ -181,7 +189,7 @@ public class DynamicPartSever : MonoBehaviour
     // 收集手臂骨骼链
     void CollectPartBones(Transform startBone)
     {
-        var bones = new HashSet<int>();
+        HashSet<int> bones = new HashSet<int>();
         _partBonesDic[startBone] = bones;
         bones.Clear();
         Transform current = startBone;
@@ -202,6 +210,36 @@ public class DynamicPartSever : MonoBehaviour
             index++;
         }
         _partBonesTrDic[startBone] = bonesArray;
+
+        UnityEngine.Profiling.Profiler.BeginSample("====triOriIndexHash");
+        var triOriIndexHash = new Dictionary<int, int>(512);
+        partTr2TriIndexHashDic[startBone] = triOriIndexHash;
+        for (int subMesh = 0; subMesh < _originaleSubmeshCount; subMesh++)
+        {
+            var triangles = oriTriangles[subMesh];
+            var trianglesCount = triangles.Count;
+            for (int i = 0; i < trianglesCount; i++)
+            {
+                int originalIndex = triangles[i];
+                if(triOriIndexHash.ContainsKey(originalIndex))
+                {
+                    continue;
+                }
+                BoneWeight weight = _oriMeshBoneWeights[originalIndex];
+
+                // 检查顶点是否属于目标骨骼
+                bool isTargetVertex = (weight.weight0 >= boneWeightThreshold && IsBoneInPart(bones, weight.boneIndex0)) ||
+                                      (weight.weight1 >= boneWeightThreshold && IsBoneInPart(bones, weight.boneIndex1)) ||
+                                      (weight.weight2 >= boneWeightThreshold && IsBoneInPart(bones, weight.boneIndex2)) ||
+                                      (weight.weight3 >= boneWeightThreshold && IsBoneInPart(bones, weight.boneIndex3));
+
+                if (isTargetVertex)
+                {
+                    triOriIndexHash[originalIndex] = 1;
+                }
+            }
+        }
+        UnityEngine.Profiling.Profiler.EndSample();
 
         var newMesh = new Mesh();
         //预先赋值，消除后续extractmesh的gc开销
@@ -360,11 +398,12 @@ public class DynamicPartSever : MonoBehaviour
     {
         var partBonesList = _partBonesDic[original];
         var newMesh = newMeshDic[original];
+        var triOriIndexHash = partTr2TriIndexHashDic[original];
 
         //var partBoneTrArray = _partBonesTrDic[original];
 
         // 获取手臂部分的网格数据
-        Mesh severedMesh = ExtractSubMesh(partBonesList, newRoot, newMesh);
+        Mesh severedMesh = ExtractSubMesh(triOriIndexHash, partBonesList, newRoot, newMesh);
 
         // 创建新渲染器
         SkinnedMeshRenderer newSMR = smrDic[original];// newRoot.gameObject.AddComponent<SkinnedMeshRenderer>();
@@ -426,7 +465,7 @@ public class DynamicPartSever : MonoBehaviour
     private List<Vector2> newUV3 = new List<Vector2>(512);
     private List<Vector2> newUV4 = new List<Vector2>(512);
     private List<Color> newColors = new List<Color>(512);
-    Mesh ExtractSubMesh(HashSet<int> targetBones, Transform newRoot, Mesh newMesh)
+    Mesh ExtractSubMesh(Dictionary<int, int> triOriIndexHash, HashSet<int> targetBones, Transform newRoot, Mesh newMesh)
     {
         bakedMesh.Clear();
         //Mesh bakedMesh = new Mesh();
@@ -481,15 +520,16 @@ public class DynamicPartSever : MonoBehaviour
             for (int i = 0; i < trianglesCount; i++)
             {
                 //UnityEngine.Profiling.Profiler.BeginSample("====triangles");
-                int originalIndex = triangles[i];
-                BoneWeight weight = weights[originalIndex];
+                int originalIndex = triangles[i];//这里边的是有可能重复的
+                //BoneWeight weight = weights[originalIndex];
                 //UnityEngine.Profiling.Profiler.EndSample();
 
                 // 检查顶点是否属于目标骨骼
-                bool isTargetVertex = (weight.weight0 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex0)) ||
-                                      (weight.weight1 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex1)) ||
-                                      (weight.weight2 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex2)) ||
-                                      (weight.weight3 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex3));
+                //bool isTargetVertex = (weight.weight0 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex0)) ||
+                //                      (weight.weight1 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex1)) ||
+                //                      (weight.weight2 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex2)) ||
+                //                      (weight.weight3 >= boneWeightThreshold && IsBoneInPart(targetBones, weight.boneIndex3));
+                bool isTargetVertex = triOriIndexHash.ContainsKey(originalIndex);
 
                 if (isTargetVertex && !vertexMap.ContainsKey(originalIndex))
                 {

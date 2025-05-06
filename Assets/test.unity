@@ -174,7 +174,7 @@ Prefab:
       objectReference: {fileID: 0}
     - target: {fileID: 142430, guid: 150ac53d485c0b647ad443c252937211, type: 2}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_ParentPrefab: {fileID: 100100000, guid: 150ac53d485c0b647ad443c252937211, type: 2}
@@ -243,7 +243,6 @@ MonoBehaviour:
   dismemberBoneList: []
   _woundMaterial: {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
   _severForce: 5
-  _idleAnimation: {fileID: 0}
 --- !u!1001 &562557769
 Prefab:
   m_ObjectHideFlags: 0
@@ -316,7 +315,6 @@ MonoBehaviour:
   dismemberBoneList: []
   _woundMaterial: {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
   _severForce: 5
-  _idleAnimation: {fileID: 0}
 --- !u!1 &779058646
 GameObject:
   m_ObjectHideFlags: 0
@@ -578,7 +576,6 @@ MonoBehaviour:
   - {fileID: 1244531926}
   _woundMaterial: {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
   _severForce: 5
-  _idleAnimation: {fileID: 0}
 --- !u!114 &1377456856
 MonoBehaviour:
   m_ObjectHideFlags: 0
