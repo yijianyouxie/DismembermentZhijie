@@ -110,7 +110,7 @@ public class DynamicPartSever : MonoBehaviour
     //private int _oriUVs4Count = 0;
     //private int _oriColorsCount = 0;
     private int _originaleSubmeshCount = 0;
-    private Dictionary<int, List<int>> oriTriangles = new Dictionary<int, List<int>>(4);
+    private Dictionary<int, List<int>> oriTriangles = new Dictionary<int, List<int>>(2);
 
     private void GetOriginalInfos()
     {
@@ -511,16 +511,19 @@ public class DynamicPartSever : MonoBehaviour
         //Matrix4x4 newRootWorldMatrix = newRoot.localToWorldMatrix;
 
         // 第一步：收集所有相关顶点
-        for (int subMesh = 0; subMesh < _originaleSubmeshCount; subMesh++)
-        {
-            //int[] triangles = _originalMesh.GetTriangles(subMesh);
-            //oriTriangles[subMesh] = triangles;
-            var triangles = oriTriangles[subMesh];
-            var trianglesCount = triangles.Count;
-            for (int i = 0; i < trianglesCount; i++)
+        //for (int subMesh = 0; subMesh < _originaleSubmeshCount; subMesh++)
+        //{
+        //    //int[] triangles = _originalMesh.GetTriangles(subMesh);
+        //    //oriTriangles[subMesh] = triangles;
+        //    var triangles = oriTriangles[subMesh];
+        //    var trianglesCount = triangles.Count;
+        //    Debug.LogError("========trianglesCount:"+ trianglesCount + " currVertices.Count:" + currVertices.Count);
+            var len = currVertices.Count;
+            for (int i = 0; i < len; i++)
             {
                 //UnityEngine.Profiling.Profiler.BeginSample("====triangles");
-                int originalIndex = triangles[i];//这里边的是有可能重复的
+                //int originalIndex = triangles[i];//这里边的是有可能重复的
+                int originalIndex = i;//这里边的是有可能重复的
                 //BoneWeight weight = weights[originalIndex];
                 //UnityEngine.Profiling.Profiler.EndSample();
 
@@ -590,7 +593,7 @@ public class DynamicPartSever : MonoBehaviour
                     //UnityEngine.Profiling.Profiler.EndSample();
                 }
             }
-        }
+        //}
 
         // 第二步：重新构建三角形
         for (int subMesh = 0; subMesh < _originaleSubmeshCount; subMesh++)
