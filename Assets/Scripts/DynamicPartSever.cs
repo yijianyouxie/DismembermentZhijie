@@ -535,6 +535,10 @@ public class DynamicPartSever : MonoBehaviour
 
         // 顶点映射字典（旧索引 -> 新索引）
         //vertexMap.Clear();
+        if(vertexMap.Length < currVertices.Count)
+        {
+            vertexMap = new int[currVertices.Count];
+        }
         vertexMap.SetAll<int>(-1);
         newVertices.Clear();
         //newBoneWeights.Clear();
@@ -850,7 +854,8 @@ public class DynamicPartSever : MonoBehaviour
     {
         //Rigidbody rb = severedPart.AddComponent<Rigidbody>();
         Rigidbody rb = severedPart.GetComponent<Rigidbody>();
-        rb.mass = 3f;
+        rb.mass = 10f;
+        rb.drag = 1f;
         rb.AddForce(Random.onUnitSphere * _severForce, ForceMode.Impulse);
 
         //MeshCollider collider = severedPart.AddComponent<MeshCollider>();
