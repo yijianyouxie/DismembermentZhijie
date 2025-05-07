@@ -113,6 +113,8 @@ public class DynamicPartSever : MonoBehaviour
         for(int i = 0; i < 8; i++)
         {
             newBone = new GameObject();
+            newBone.AddComponent<Rigidbody>();
+            newBone.AddComponent<MeshCollider>();
             newBoneGOQueue.Enqueue(newBone);
             newBoneGO2Tr[newBone] = newBone.transform;
         }
@@ -309,9 +311,9 @@ public class DynamicPartSever : MonoBehaviour
         //CreateWoundEffect(tr);
 
         // 重置身体动画
-        Animation anim = GetComponent<Animation>();
-        anim.Stop();
-        anim.Play();
+        //Animation anim = GetComponent<Animation>();
+        //anim.Stop();
+        //anim.Play();
 
         //_isSevered = true;
     }
@@ -323,7 +325,10 @@ public class DynamicPartSever : MonoBehaviour
             return newBoneGOQueue.Dequeue();
         }else
         {
-            return new GameObject();
+            var go = new GameObject();
+            go.AddComponent<Rigidbody>();
+            go.AddComponent<MeshCollider>();
+            return go;
         }
     }
     private void RecycleNewBone(GameObject newBone)
@@ -414,11 +419,21 @@ public class DynamicPartSever : MonoBehaviour
         }
 
         Transform tr;
+        //直接foreach dic有box gc.下边的写法直接获取迭代器也同样还是会产生32B+32B的gc
         foreach (var item in boneMap)
         {
             tr = item.Value;
             RecycleNewBone(tr.gameObject);
         }
+        //var iterator = boneMap.GetEnumerator();
+        //while (iterator.MoveNext())
+        //{
+        //    tr = iterator.Current.Value;
+        //    if (null != tr)
+        //    {
+        //        RecycleNewBone(tr.gameObject);
+        //    }
+        //}
         boneMap.Clear();
 
         //UnityEngine.Profiling.Profiler.EndSample();
@@ -833,11 +848,13 @@ public class DynamicPartSever : MonoBehaviour
 
     void AddPhysicsToSeveredPart(GameObject severedPart)
     {
-        Rigidbody rb = severedPart.AddComponent<Rigidbody>();
+        //Rigidbody rb = severedPart.AddComponent<Rigidbody>();
+        Rigidbody rb = severedPart.GetComponent<Rigidbody>();
         rb.mass = 3f;
         rb.AddForce(Random.onUnitSphere * _severForce, ForceMode.Impulse);
 
-        MeshCollider collider = severedPart.AddComponent<MeshCollider>();
+        //MeshCollider collider = severedPart.AddComponent<MeshCollider>();
+        MeshCollider collider = severedPart.GetComponent<MeshCollider>();
         collider.convex = true;
         collider.sharedMesh = severedPart.GetComponentInChildren<SkinnedMeshRenderer>().sharedMesh;
 
