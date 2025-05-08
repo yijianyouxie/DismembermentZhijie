@@ -113,8 +113,11 @@ public class DynamicPartSever : MonoBehaviour
         for(int i = 0; i < 8; i++)
         {
             newBone = new GameObject();
-            newBone.AddComponent<Rigidbody>();
-            newBone.AddComponent<MeshCollider>();
+            var rb = newBone.AddComponent<Rigidbody>();
+            rb.useGravity = false;
+            rb.isKinematic = true;
+            var mc = newBone.AddComponent<MeshCollider>();
+            mc.enabled = false;
             newBoneGOQueue.Enqueue(newBone);
             newBoneGO2Tr[newBone] = newBone.transform;
         }
@@ -325,10 +328,14 @@ public class DynamicPartSever : MonoBehaviour
             return newBoneGOQueue.Dequeue();
         }else
         {
-            var go = new GameObject();
-            go.AddComponent<Rigidbody>();
-            go.AddComponent<MeshCollider>();
-            return go;
+            var newBone = new GameObject();
+            var rb = newBone.AddComponent<Rigidbody>();
+            rb.useGravity = false;
+            rb.isKinematic = true;
+            var mc = newBone.AddComponent<MeshCollider>();
+            mc.enabled = false;       
+            newBoneGO2Tr[newBone] = newBone.transform;
+            return newBone;
         }
     }
     private void RecycleNewBone(GameObject newBone)
@@ -341,7 +348,7 @@ public class DynamicPartSever : MonoBehaviour
     //key是原始整个骨骼里的索引，value是在新骨骼中的索引
     public static Dictionary<int, int> partOriginalBoneIndexMap = new Dictionary<int, int>(8);
     private Dictionary<Transform, Transform> boneMap = new Dictionary<Transform, Transform>(8);
-    private Stack<Transform> stack = new Stack<Transform>(2);
+    private Stack<Transform> stack = new Stack<Transform>(4);
     private List<Transform> newBoneList = new List<Transform>(8);
     Transform DuplicateBoneHierarchy(Transform original)
     {
@@ -350,6 +357,11 @@ public class DynamicPartSever : MonoBehaviour
 
         //GameObject newRoot = new GameObject(original.name); // 保持相同名称
         GameObject newRoot = GetNewBone();
+//#if UNITY_EDITOR
+//        UnityEngine.Profiling.Profiler.BeginSample("DuplicateBoneHierarchy.GC only run in Unity Editor.");
+//        newRoot.name = original.name;
+//        UnityEngine.Profiling.Profiler.EndSample();
+//#endif
         //newRoot.transform.SetPositionAndRotation(original.position, original.rotation);
         //Debug.LogError("====original.position:"+ original.position + " newRoot.transform:"+ newRoot.transform.position);
         // 使用当前动画姿势的位置和旋转
@@ -379,6 +391,11 @@ public class DynamicPartSever : MonoBehaviour
                 // 创建新骨骼
 
                 GameObject newBone = GetNewBone();
+//#if UNITY_EDITOR
+//                UnityEngine.Profiling.Profiler.BeginSample("DuplicateBoneHierarchy.GC only run in Unity Editor.");
+//                newBone.name = child.name;
+//                UnityEngine.Profiling.Profiler.EndSample();
+//#endif
                 var newBoneTr = newBoneGO2Tr[newBone];
                 //newBone.transform.SetParent(boneMap[current]);
                 ////newBone.transform.SetLocalPositionAndRotation(child.localPosition, child.localRotation);
@@ -418,13 +435,14 @@ public class DynamicPartSever : MonoBehaviour
             partOriginalBoneIndexMap[_partBonesOriIndexList[i]] = i;
         }
 
-        Transform tr;
-        //直接foreach dic有box gc.下边的写法直接获取迭代器也同样还是会产生32B+32B的gc
-        foreach (var item in boneMap)
-        {
-            tr = item.Value;
-            RecycleNewBone(tr.gameObject);
-        }
+        //此处不能重复利用啊，boneMap里存的是有用的
+        //Transform tr;
+        ////直接foreach dic有box gc.下边的写法直接获取迭代器也同样还是会产生32B+32B的gc
+        //foreach (var item in boneMap)
+        //{
+        //    tr = item.Value;
+        //    RecycleNewBone(tr.gameObject);
+        //}
         //var iterator = boneMap.GetEnumerator();
         //while (iterator.MoveNext())
         //{
@@ -769,7 +787,7 @@ public class DynamicPartSever : MonoBehaviour
         //return partBonesList.Contains(boneIndex);
         return partBonesList.Contains(boneIndex);
     }
-    private List<int> validTriangles = new List<int>(4096);
+    private List<int> validTriangles = new List<int>(9192);
     void UpdateBodyMesh(Dictionary<int, int> triOriIndexHash, Transform original)
     {
         var partBonesList = _partBonesDic[original];
@@ -854,12 +872,15 @@ public class DynamicPartSever : MonoBehaviour
     {
         //Rigidbody rb = severedPart.AddComponent<Rigidbody>();
         Rigidbody rb = severedPart.GetComponent<Rigidbody>();
+        rb.useGravity = true;
+        rb.isKinematic = false;
         rb.mass = 10f;
         rb.drag = 1f;
         rb.AddForce(Random.onUnitSphere * _severForce, ForceMode.Impulse);
 
         //MeshCollider collider = severedPart.AddComponent<MeshCollider>();
         MeshCollider collider = severedPart.GetComponent<MeshCollider>();
+        collider.enabled = true;
         collider.convex = true;
         collider.sharedMesh = severedPart.GetComponentInChildren<SkinnedMeshRenderer>().sharedMesh;
 
