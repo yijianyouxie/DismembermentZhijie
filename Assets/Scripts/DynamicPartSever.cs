@@ -220,6 +220,37 @@ public class DynamicPartSever : MonoBehaviour
         }
     }
 
+    void TraverseChild(Transform tr, HashSet<int> bones)
+    {
+        if(null != tr)
+        {
+            int boneIndex = -1;
+            if (_boneTr2IndexDic.TryGetValue(tr, out boneIndex))
+            {
+                bones.Add(boneIndex);
+                _partBonesOriIndexList.Add(boneIndex);
+            }
+
+            if (tr.childCount > 0)
+            {
+                for (int i = 0; i < tr.childCount; i++)
+                {
+                    var current = tr.GetChild(i);
+                    if(null != current)
+                    {
+                        boneIndex = -1;
+                        if(_boneTr2IndexDic.TryGetValue(current, out boneIndex))
+                        {
+                            bones.Add(boneIndex);
+                            _partBonesOriIndexList.Add(boneIndex);
+                        }
+
+                        TraverseChild(current, bones);
+                    }
+                }
+            }
+        }
+    }
     // 收集手臂骨骼链
     void CollectPartBones(Transform startBone)
     {
@@ -227,13 +258,14 @@ public class DynamicPartSever : MonoBehaviour
         _partBonesDic[startBone] = bones;
         bones.Clear();
         Transform current = startBone;
-        while (current != null)
-        {
-            bones.Add(_boneTr2IndexDic[current]);
-            _partBonesOriIndexList.Add(_boneTr2IndexDic[current]);
-            if (current.childCount > 0) current = current.GetChild(0);
-            else break;
-        }
+        TraverseChild(current, bones);
+        //while (current != null)
+        //{
+        //    bones.Add(_boneTr2IndexDic[current]);
+        //    _partBonesOriIndexList.Add(_boneTr2IndexDic[current]);
+        //    if (current.childCount > 0) current = current.GetChild(0);
+        //    else break;
+        //}
         //获取长度后，开辟数组
         var bonesLen = bones.Count;
         var bonesArray = new Transform[bonesLen];
@@ -357,11 +389,11 @@ public class DynamicPartSever : MonoBehaviour
 
         //GameObject newRoot = new GameObject(original.name); // 保持相同名称
         GameObject newRoot = GetNewBone();
-//#if UNITY_EDITOR
-//        UnityEngine.Profiling.Profiler.BeginSample("DuplicateBoneHierarchy.GC only run in Unity Editor.");
-//        newRoot.name = original.name;
-//        UnityEngine.Profiling.Profiler.EndSample();
-//#endif
+#if UNITY_EDITOR
+        UnityEngine.Profiling.Profiler.BeginSample("DuplicateBoneHierarchy.GC only run in Unity Editor.");
+        newRoot.name = original.name;
+        UnityEngine.Profiling.Profiler.EndSample();
+#endif
         //newRoot.transform.SetPositionAndRotation(original.position, original.rotation);
         //Debug.LogError("====original.position:"+ original.position + " newRoot.transform:"+ newRoot.transform.position);
         // 使用当前动画姿势的位置和旋转
@@ -391,11 +423,11 @@ public class DynamicPartSever : MonoBehaviour
                 // 创建新骨骼
 
                 GameObject newBone = GetNewBone();
-//#if UNITY_EDITOR
-//                UnityEngine.Profiling.Profiler.BeginSample("DuplicateBoneHierarchy.GC only run in Unity Editor.");
-//                newBone.name = child.name;
-//                UnityEngine.Profiling.Profiler.EndSample();
-//#endif
+#if UNITY_EDITOR
+                UnityEngine.Profiling.Profiler.BeginSample("DuplicateBoneHierarchy.GC only run in Unity Editor.");
+                newBone.name = child.name;
+                UnityEngine.Profiling.Profiler.EndSample();
+#endif
                 var newBoneTr = newBoneGO2Tr[newBone];
                 //newBone.transform.SetParent(boneMap[current]);
                 ////newBone.transform.SetLocalPositionAndRotation(child.localPosition, child.localRotation);
