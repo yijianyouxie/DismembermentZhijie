@@ -55,6 +55,8 @@ public class DynamicPartSever : MonoBehaviour
 
     private Mesh newBodyMesh;
 
+    private RagdollEnabler rde;
+
     void Start()
     {
         //UnityEngine.Profiling.Profiler.BeginSample("====Start");
@@ -134,6 +136,8 @@ public class DynamicPartSever : MonoBehaviour
         }
 
         newBodyMesh = new Mesh();
+
+        rde = GetComponent<RagdollEnabler>();
 
         //UnityEngine.Profiling.Profiler.EndSample();
     }
@@ -228,6 +232,14 @@ public class DynamicPartSever : MonoBehaviour
             }
             SeverPart(dismemberBoneList[2], subSkinnedMeshRenderList[2]);
             partSeverdSet.Add(2);
+        }
+
+        if (Input.GetKeyDown(KeyCode.F))
+        {
+            if(null != rde)
+            {
+                rde.ActivateRagdoll(UnityEngine.Random.onUnitSphere * _severForce * 10);
+            }
         }
     }
 
