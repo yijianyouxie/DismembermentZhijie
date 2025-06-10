@@ -597,6 +597,7 @@ MonoBehaviour:
   dismemberBoneList:
   - {fileID: 943290639}
   - {fileID: 2107484780}
+  subSkinnedMeshRenderList: []
   _woundMaterial: {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
   _severForce: 50
 --- !u!1 &464888815
@@ -731,6 +732,7 @@ MonoBehaviour:
   dismemberBoneList:
   - {fileID: 923706864}
   - {fileID: 1514631450}
+  subSkinnedMeshRenderList: []
   _woundMaterial: {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
   _severForce: 50
 --- !u!1 &577307153
@@ -1565,6 +1567,7 @@ MonoBehaviour:
   - {fileID: 230120475}
   - {fileID: 218229177}
   - {fileID: 155650904}
+  subSkinnedMeshRenderList: []
   _woundMaterial: {fileID: 0}
   _severForce: 50
 --- !u!1 &1377456854 stripped
@@ -1586,6 +1589,7 @@ MonoBehaviour:
   - {fileID: 1532008136}
   - {fileID: 838229458}
   - {fileID: 1244531926}
+  subSkinnedMeshRenderList: []
   _woundMaterial: {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
   _severForce: 20
 --- !u!114 &1377456856
@@ -1773,6 +1777,7 @@ MonoBehaviour:
   - {fileID: 1495112303}
   - {fileID: 1495112303}
   - {fileID: 1495112303}
+  subSkinnedMeshRenderList: []
   _woundMaterial: {fileID: 0}
   _severForce: 5
 --- !u!111 &1495112305
@@ -1916,7 +1921,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1702716910
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1932,6 +1937,10 @@ MonoBehaviour:
   - {fileID: 1067910851}
   - {fileID: 1877397627}
   - {fileID: 1668159014}
+  subSkinnedMeshRenderList:
+  - {fileID: 98039870}
+  - {fileID: 0}
+  - {fileID: 0}
   _woundMaterial: {fileID: 0}
   _severForce: 50
 --- !u!114 &1702716911
@@ -1994,7 +2003,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 207c75cf457cc8c478be860c715c7a2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  smr: {fileID: 0}
+  smr: {fileID: 98039870}
+  targetBone: {fileID: 0}
 --- !u!1 &1737854832
 GameObject:
   m_ObjectHideFlags: 0
@@ -2076,6 +2086,10 @@ Prefab:
       propertyPath: m_RootOrder
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 100066, guid: 77bee741dc579b94da0f2e6851ea851e, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 9500000, guid: 77bee741dc579b94da0f2e6851ea851e, type: 3}
   m_ParentPrefab: {fileID: 100100000, guid: 77bee741dc579b94da0f2e6851ea851e, type: 3}
@@ -2103,6 +2117,7 @@ MonoBehaviour:
   - {fileID: 1884517341}
   - {fileID: 1884517341}
   - {fileID: 1884517341}
+  subSkinnedMeshRenderList: []
   _woundMaterial: {fileID: 0}
   _severForce: 5
 --- !u!111 &1884517343

@@ -9,6 +9,7 @@ using UnityEngine;
 public class TestSkinBones : MonoBehaviour {
 
     public SkinnedMeshRenderer smr;
+    public Transform targetBone;
 	// Use this for initialization
 	void Start () {
 		
@@ -23,8 +24,11 @@ public class TestSkinBones : MonoBehaviour {
     {
         if(GUI.Button(new Rect(0,0,100,50), "RemoveBones"))
         {
-            Transform[] newBones = new Transform[0];
+            Transform[] newBones = new Transform[1] { targetBone };
             smr.bones = newBones;
         }
+
+        //Animation ani;
+        //ani.animation
     }
 }

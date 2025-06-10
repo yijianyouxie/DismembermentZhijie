@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System;
 
 [RequireComponent(typeof(Animation))]
 public class DynamicPartSever : MonoBehaviour
@@ -8,6 +9,9 @@ public class DynamicPartSever : MonoBehaviour
     //[SerializeField] private Transform _shoulderBone;  // 肩膀骨骼（分离点）
     //[SerializeField] private Transform _headBone;  // 肩膀骨骼（分离点）
     [SerializeField] private List<Transform> dismemberBoneList;  // 肩膀骨骼（分离点）
+    [SerializeField]
+    private List<SkinnedMeshRenderer> subSkinnedMeshRenderList;
+    private Dictionary<Transform, Transform[]> subSkinBonesDic = new Dictionary<Transform, Transform[]>(4);
     [SerializeField] private Material _woundMaterial;  // 截面材质
     [SerializeField] private float _severForce = 5f;   // 分离力度
 
@@ -105,6 +109,13 @@ public class DynamicPartSever : MonoBehaviour
             obj.SetActive(false);
             smrDic[tr] = smr;
             smrTrDic[tr] = smr.transform;
+
+            //两者长度一致
+            var subSkinMR = subSkinnedMeshRenderList[i];
+            if(null != subSkinMR)
+            {
+                subSkinBonesDic[tr] = subSkinMR.bones;
+            }
         }
 
         bakedMesh = new Mesh();
@@ -196,7 +207,7 @@ public class DynamicPartSever : MonoBehaviour
             {
                 return;
             }
-            SeverPart(dismemberBoneList[0]);
+            SeverPart(dismemberBoneList[0], subSkinnedMeshRenderList[0]);
             partSeverdSet.Add(0);
         }
 
@@ -206,7 +217,7 @@ public class DynamicPartSever : MonoBehaviour
             {
                 return;
             }
-            SeverPart(dismemberBoneList[1]);
+            SeverPart(dismemberBoneList[1], subSkinnedMeshRenderList[1]);
             partSeverdSet.Add(1);
         }
         if (Input.GetKeyDown(KeyCode.D))
@@ -215,7 +226,7 @@ public class DynamicPartSever : MonoBehaviour
             {
                 return;
             }
-            SeverPart(dismemberBoneList[2]);
+            SeverPart(dismemberBoneList[2], subSkinnedMeshRenderList[2]);
             partSeverdSet.Add(2);
         }
     }
@@ -321,7 +332,7 @@ public class DynamicPartSever : MonoBehaviour
         newMeshDic[startBone] = newMesh;
     }
 
-    public void SeverPart(Transform tr)
+    public void SeverPart(Transform tr, SkinnedMeshRenderer subSmr)
     {
         //if (_isSevered) return;
 
@@ -334,7 +345,7 @@ public class DynamicPartSever : MonoBehaviour
 
         var triOriIndexHash = partTr2TriIndexHashDic[tr];
         // 步骤2：创建手臂网格
-        CreateSeveredPartMesh(triOriIndexHash, tr, severedRoot);
+        CreateSeveredPartMesh(triOriIndexHash, tr, severedRoot, subSmr);
 
         // 步骤3：更新身体网格
         UpdateBodyMesh(triOriIndexHash, tr);
@@ -402,6 +413,17 @@ public class DynamicPartSever : MonoBehaviour
         newRootTr.rotation = original.rotation;
         newRootTr.localScale = original.localScale;
 
+        Transform[] subSkinBones;
+        int subBoneIndex = -1;
+        if (subSkinBonesDic.TryGetValue(original, out subSkinBones))
+        {
+            subBoneIndex = Array.IndexOf(subSkinBones, original);
+            if (subBoneIndex >= 0)
+            {
+                subSkinBones[subBoneIndex] = newRootTr;
+            }        
+        }
+
         // 使用字典映射原始骨骼和新骨骼
         boneMap.Clear();
         boneMap.Add(original, newRootTr);
@@ -443,6 +465,15 @@ public class DynamicPartSever : MonoBehaviour
                 newBoneTr.localPosition = child.localPosition;
                 newBoneTr.localRotation = child.localRotation;
                 newBoneTr.localScale = child.localScale;
+
+                if(null != subSkinBones)
+                {
+                    subBoneIndex = Array.IndexOf(subSkinBones, child);
+                    if (subBoneIndex >= 0)
+                    {
+                        subSkinBones[subBoneIndex] = newBoneTr;
+                    }
+                }
 
                 boneMap.Add(child, newBoneTr);
                 stack.Push(child);
@@ -490,7 +521,7 @@ public class DynamicPartSever : MonoBehaviour
         return newRootTr;
     }
 
-    void CreateSeveredPartMesh(Dictionary<int, int> triOriIndexHash, Transform original, Transform newRoot)
+    void CreateSeveredPartMesh(Dictionary<int, int> triOriIndexHash, Transform original, Transform newRoot, SkinnedMeshRenderer subSmr)
     {
         var partBonesList = _partBonesDic[original];
         var newMesh = newMeshDic[original];
@@ -545,6 +576,11 @@ public class DynamicPartSever : MonoBehaviour
 
         //// 添加调试可视化
         //newRoot.gameObject.AddComponent<BoneVisualizer>();
+        Transform[] subSkinBones;
+        if(subSkinBonesDic.TryGetValue(original, out subSkinBones))
+        {
+            subSmr.bones = subSkinBonesDic[original];
+        }
     }
 
     private List<Vector3> currVertices = new List<Vector3>(2048);
@@ -908,7 +944,7 @@ public class DynamicPartSever : MonoBehaviour
         rb.isKinematic = false;
         rb.mass = 10f;
         rb.drag = 1f;
-        rb.AddForce(Random.onUnitSphere * _severForce, ForceMode.Impulse);
+        rb.AddForce(UnityEngine.Random.onUnitSphere * _severForce, ForceMode.Impulse);
 
         //MeshCollider collider = severedPart.AddComponent<MeshCollider>();
         MeshCollider collider = severedPart.GetComponent<MeshCollider>();
