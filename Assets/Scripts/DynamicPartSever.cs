@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System;
+using System.Collections;
 
 [RequireComponent(typeof(Animation))]
 public class DynamicPartSever : MonoBehaviour
@@ -12,7 +13,7 @@ public class DynamicPartSever : MonoBehaviour
     [SerializeField]
     private List<SkinnedMeshRenderer> subSkinnedMeshRenderList;
     private Dictionary<Transform, Transform[]> subSkinBonesDic = new Dictionary<Transform, Transform[]>(4);
-    [SerializeField] private Material _woundMaterial;  // 截面材质
+    //[SerializeField] private Material _woundMaterial;  // 截面材质
     [SerializeField] private float _severForce = 5f;   // 分离力度
 
     private SkinnedMeshRenderer _bodySMR;
@@ -56,6 +57,10 @@ public class DynamicPartSever : MonoBehaviour
     private Mesh newBodyMesh;
 
     private RagdollEnabler rde;
+
+    //特效
+    private GameObject attackEffect;
+    private GameObject shoujiEffect;
 
     void Start()
     {
@@ -139,6 +144,17 @@ public class DynamicPartSever : MonoBehaviour
 
         rde = GetComponent<RagdollEnabler>();
 
+        attackEffect = GameObject.Find("taohuadao_biboyunhai_zidan");
+        shoujiEffect = GameObject.Find("boss_juru_shouji");
+        if(null != attackEffect)
+        {
+            attackEffect.transform.position = new Vector3(10000, 0, 0);
+        }
+        if(null != shoujiEffect)
+        {
+            shoujiEffect.transform.position = new Vector3(10000, 0, 0);
+        }
+
         //UnityEngine.Profiling.Profiler.EndSample();
     }
     private List<Vector3> _oriMeshVertices = new List<Vector3>(2048);
@@ -203,25 +219,32 @@ public class DynamicPartSever : MonoBehaviour
         //UnityEngine.Profiling.Profiler.EndSample();
     }
 
+    private float elapseTime = 0;
+    private float flyTotalTime = 0.5f;
+    private Transform targetTr = null;
     void LateUpdate()
     {
-        if (Input.GetKeyDown(KeyCode.S) )
+        if (Input.GetKeyDown(KeyCode.A) )
         {
             if(partSeverdSet.Contains(0))
             {
                 return;
             }
-            SeverPart(dismemberBoneList[0], subSkinnedMeshRenderList[0]);
+            targetTr = dismemberBoneList[0];
+            elapseTime = 0;
+            StartCoroutine(SeverPart(dismemberBoneList[0], subSkinnedMeshRenderList[0]));
             partSeverdSet.Add(0);
         }
 
-        if(Input.GetKeyDown(KeyCode.A))
+        if(Input.GetKeyDown(KeyCode.S))
         {
             if (partSeverdSet.Contains(1))
             {
                 return;
             }
-            SeverPart(dismemberBoneList[1], subSkinnedMeshRenderList[1]);
+            targetTr = dismemberBoneList[1];
+            elapseTime = 0;
+            StartCoroutine(SeverPart(dismemberBoneList[1], subSkinnedMeshRenderList[1]));
             partSeverdSet.Add(1);
         }
         if (Input.GetKeyDown(KeyCode.D))
@@ -230,13 +253,41 @@ public class DynamicPartSever : MonoBehaviour
             {
                 return;
             }
-            SeverPart(dismemberBoneList[2], subSkinnedMeshRenderList[2]);
+            targetTr = dismemberBoneList[2];
+            elapseTime = 0;
+            StartCoroutine(SeverPart(dismemberBoneList[2], subSkinnedMeshRenderList[2]));
             partSeverdSet.Add(2);
         }
 
         if (Input.GetKeyDown(KeyCode.F))
         {
             if(null != rde)
+            {
+                rde.ActivateRagdoll(UnityEngine.Random.onUnitSphere * _severForce * 10);
+            }
+        }
+        bool hide = elapseTime > flyTotalTime;
+        if(hide)
+        {
+            attackEffect.transform.position = new Vector3(10000, 0, 0);
+        }
+        //特效移动
+        if (null != targetTr && null != attackEffect && !hide)
+        {
+            elapseTime += Time.deltaTime;
+            var camPos = Camera.main.transform.position;
+            camPos.y -= 2f;
+            var pos = Vector3.Lerp(camPos, targetTr.position, elapseTime/flyTotalTime);
+            attackEffect.transform.position = pos;
+            if(elapseTime > flyTotalTime)
+            {
+                attackEffect.transform.position = new Vector3(10000, 0, 0);
+            }
+        }
+
+        if (Input.GetKeyDown(KeyCode.C))
+        {
+            if (null != rde)
             {
                 rde.ActivateRagdoll(UnityEngine.Random.onUnitSphere * _severForce * 10);
             }
@@ -344,8 +395,16 @@ public class DynamicPartSever : MonoBehaviour
         newMeshDic[startBone] = newMesh;
     }
 
-    public void SeverPart(Transform tr, SkinnedMeshRenderer subSmr)
+    IEnumerator SeverPart(Transform tr, SkinnedMeshRenderer subSmr)
     {
+        yield return new WaitForSeconds(flyTotalTime);
+        //显示攻击特效
+        if(null != shoujiEffect)
+        {
+            shoujiEffect.transform.position = tr.position;
+            shoujiEffect.SetActive(false);
+            shoujiEffect.SetActive(true);
+        }
         //if (_isSevered) return;
 
         //Animation ani = GetComponent<Animation>();
@@ -956,7 +1015,7 @@ public class DynamicPartSever : MonoBehaviour
         rb.isKinematic = false;
         rb.mass = 10f;
         rb.drag = 1f;
-        rb.AddForce(UnityEngine.Random.onUnitSphere * _severForce, ForceMode.Impulse);
+        rb.AddForce(UnityEngine.Random.onUnitSphere * _severForce/3, ForceMode.Impulse);
 
         //MeshCollider collider = severedPart.AddComponent<MeshCollider>();
         MeshCollider collider = severedPart.GetComponent<MeshCollider>();
@@ -967,48 +1026,222 @@ public class DynamicPartSever : MonoBehaviour
         //severedPart.AddComponent<BoneFreezer>();
     }
 
-    void CreateWoundEffect(Transform original)
-    {
-        GameObject wound = new GameObject("Wound");
-        wound.transform.SetParent(original.parent);
-        wound.transform.position = original.position;
-        wound.transform.rotation = original.rotation;
+    //void CreateWoundEffect(Transform original)
+    //{
+    //    GameObject wound = new GameObject("Wound");
+    //    wound.transform.SetParent(original.parent);
+    //    wound.transform.position = original.position;
+    //    wound.transform.rotation = original.rotation;
 
-        MeshFilter mf = wound.AddComponent<MeshFilter>();
-        mf.mesh = GenerateQuadMesh();
+    //    MeshFilter mf = wound.AddComponent<MeshFilter>();
+    //    mf.mesh = GenerateQuadMesh();
 
-        MeshRenderer mr = wound.AddComponent<MeshRenderer>();
-        mr.material = _woundMaterial;
-    }
+    //    MeshRenderer mr = wound.AddComponent<MeshRenderer>();
+    //    mr.material = _woundMaterial;
+    //}
 
-    Mesh GenerateQuadMesh()
-    {
-        Mesh mesh = new Mesh();
-        Vector3[] verts = new Vector3[4];
-        Vector2[] uv = new Vector2[4];
-        int[] tris = {0,1,2, 2,3,0};
+    //Mesh GenerateQuadMesh()
+    //{
+    //    Mesh mesh = new Mesh();
+    //    Vector3[] verts = new Vector3[4];
+    //    Vector2[] uv = new Vector2[4];
+    //    int[] tris = {0,1,2, 2,3,0};
 
-        verts[0] = new Vector3(-0.1f, 0, -0.1f);
-        verts[1] = new Vector3(0.1f, 0, -0.1f);
-        verts[2] = new Vector3(0.1f, 0, 0.1f);
-        verts[3] = new Vector3(-0.1f, 0, 0.1f);
+    //    verts[0] = new Vector3(-0.1f, 0, -0.1f);
+    //    verts[1] = new Vector3(0.1f, 0, -0.1f);
+    //    verts[2] = new Vector3(0.1f, 0, 0.1f);
+    //    verts[3] = new Vector3(-0.1f, 0, 0.1f);
 
-        uv[0] = Vector2.zero;
-        uv[1] = Vector2.right;
-        uv[2] = Vector2.one;
-        uv[3] = Vector2.up;
+    //    uv[0] = Vector2.zero;
+    //    uv[1] = Vector2.right;
+    //    uv[2] = Vector2.one;
+    //    uv[3] = Vector2.up;
 
-        mesh.vertices = verts;
-        mesh.uv = uv;
-        mesh.triangles = tris;
-        mesh.RecalculateNormals();
+    //    mesh.vertices = verts;
+    //    mesh.uv = uv;
+    //    mesh.triangles = tris;
+    //    mesh.RecalculateNormals();
 
-        return mesh;
-    }
+    //    return mesh;
+    //}
 
     private void OnDestroy()
     {
-        
+        if(null != subSkinBonesDic)
+        {
+            subSkinBonesDic.Clear();
+            subSkinBonesDic = null;
+        }
+
+        _bodySMRSharedMaterials = null;
+        _originalBones = null;
+
+        if(null != _boneTr2IndexDic)
+        {
+            _boneTr2IndexDic.Clear();
+            _boneTr2IndexDic = null;
+        }
+        if(null != _boneIndex2TrDic)
+        {
+            _boneIndex2TrDic.Clear();
+            _boneIndex2TrDic = null;
+        }
+        if(null != _partBonesDic)
+        {
+            _partBonesDic.Clear();
+            _partBonesDic = null;
+        }
+        if(null != _partBonesTrDic)
+        {
+            _partBonesTrDic.Clear();
+            _partBonesTrDic = null;
+        }
+        if(null != partSeverdSet)
+        {
+            partSeverdSet.Clear();
+            partSeverdSet = null;
+        }
+        if(null != _partBonesOriIndexList)
+        {
+            _partBonesOriIndexList.Clear();
+            _partBonesOriIndexList = null;
+        }
+        if(null != newMeshDic)
+        {
+            foreach (var kvp in newMeshDic)
+            {
+                if (kvp.Value != null)
+                {
+                    Destroy(kvp.Value);
+                }
+            }
+            newMeshDic.Clear();
+            newMeshDic = null;
+        }
+
+        if(null != smrTrDic)
+        {
+            smrTrDic.Clear();
+            smrTrDic = null;
+        }
+        if(null != smrDic)
+        {
+            foreach (var kvp in smrDic)
+            {
+                if (kvp.Value != null)
+                {
+                    Destroy(kvp.Value.gameObject);
+                }
+            }
+            smrDic.Clear();
+            smrDic = null;
+        }
+
+        if(null != newBoneGOQueue)
+        {
+            newBoneGOQueue.Clear();
+            newBoneGOQueue = null;
+        }
+        if(null != newBoneGO2Tr)
+        {
+            foreach (var kvp in newBoneGO2Tr)
+            {
+                if (kvp.Value != null)
+                {
+                    Destroy(kvp.Value.gameObject);//包括go上添加的gigidbody和meshCollider了
+                }
+            }
+            newBoneGO2Tr.Clear();
+            newBoneGO2Tr = null;
+        }
+
+        if(null != partTr2TriIndexHashDic)
+        {
+            partTr2TriIndexHashDic.Clear();
+            partTr2TriIndexHashDic = null;
+        }
+
+        if(null != newBodyMesh)
+        {
+            Destroy(newBodyMesh);
+        }
+
+        if(null != _oriMeshVertices)
+        {
+            _oriMeshVertices.Clear();
+            _oriMeshVertices = null;
+        }
+        if(null != _oriMeshBoneWeights)
+        {
+            _oriMeshBoneWeights.Clear();
+            _oriMeshBoneWeights = null;
+        }
+
+        _oriMeshBoneWeightArray = null;
+        if(null != _oriUVs)
+        {
+            _oriUVs.Clear();
+            _oriUVs = null;
+        }
+        if(null != oriTriangles)
+        {
+            oriTriangles.Clear();
+            oriTriangles = null;
+        }
+        oriBindposes = null;
+        if(null != oriBindposeList)
+        {
+            oriBindposeList.Clear();
+            oriBindposeList = null;
+        }
+
+        if(null != partOriginalBoneIndexMap)
+        {
+            partOriginalBoneIndexMap.Clear();
+            //partOriginalBoneIndexMap = null;
+        }
+        if(null != boneMap)
+        {
+            boneMap.Clear();
+            boneMap = null;
+        }
+        if(null != stack)
+        {
+            stack.Clear();
+            stack = null;
+        }
+        if(null != newBoneList)
+        {
+            newBoneList.Clear();
+            newBoneList = null;
+        }
+
+        if(null != currVertices)
+        {
+            currVertices.Clear();
+            currVertices = null;
+        }
+        vertexMap = null;
+        if(null != newVertices)
+        {
+            newVertices.Clear();
+            newVertices = null;
+        }
+        if(null != newTriangles)
+        {
+            newTriangles.Clear();
+            newTriangles = null;
+        }
+        if(null != newUV)
+        {
+            newUV.Clear();
+            newUV = null;
+        }
+        if(null != validTriangles)
+        {
+            validTriangles.Clear();
+            validTriangles = null;
+        }
     }
 }
 
