@@ -64,12 +64,14 @@ public class DynamicPartSever : MonoBehaviour
 
     void Start()
     {
-        //UnityEngine.Profiling.Profiler.BeginSample("====Start");
+        //UnityEngine.Profiling.Profiler.BeginSample("====Start1_1");
         _bodySMR = GetComponentInChildren<SkinnedMeshRenderer>();
         _bodySMRTr = _bodySMR.transform;
         _bodySMRSharedMaterials = _bodySMR.sharedMaterials;
         _originalMesh = Instantiate(_bodySMR.sharedMesh); // 创建网格副本
+        //UnityEngine.Profiling.Profiler.EndSample();
 
+        //UnityEngine.Profiling.Profiler.BeginSample("====Start1_2");
         oriBindposeList.Clear();
         _originalMesh.GetBindposes(oriBindposeList);
         var bindePoseCount = oriBindposeList.Count;
@@ -78,17 +80,24 @@ public class DynamicPartSever : MonoBehaviour
         {
             oriBindposes[i] = oriBindposeList[i];
         }
+        //UnityEngine.Profiling.Profiler.EndSample();
 
+        //UnityEngine.Profiling.Profiler.BeginSample("====Start1_3");
         _oriMeshBoneWeights.Clear();
         _originalMesh.GetBoneWeights(_oriMeshBoneWeights);
+        //UnityEngine.Profiling.Profiler.EndSample();
+        //UnityEngine.Profiling.Profiler.BeginSample("====Start1_4");
         var boneWeightCount = _oriMeshBoneWeights.Count;
         _oriMeshBoneWeightArray = new BoneWeight[boneWeightCount];
         for (int i = 0; i < boneWeightCount; i++)
         {
             _oriMeshBoneWeightArray[i] = _oriMeshBoneWeights[i];
         }
+        //UnityEngine.Profiling.Profiler.EndSample();
 
         GetOriginalInfos();
+
+        //UnityEngine.Profiling.Profiler.BeginSample("====Start2");
         //_originalBodyMesh = _bodySMR.sharedMesh;
         _originalRootBone = _bodySMR.rootBone;
         _originalBones = _bodySMR.bones;
@@ -101,7 +110,9 @@ public class DynamicPartSever : MonoBehaviour
             _boneTr2IndexDic[_originalBones[i]] = i;
             _boneIndex2TrDic[i] = _originalBones[i];
         }
-        
+        //UnityEngine.Profiling.Profiler.EndSample();
+
+        //UnityEngine.Profiling.Profiler.BeginSample("====Start3");
         Transform tr;
         for(int i = 0; i < dismemberBoneList.Count; i++)
         {
@@ -124,7 +135,9 @@ public class DynamicPartSever : MonoBehaviour
                 subSkinBonesDic[tr] = subSkinMR.bones;
             }
         }
+        //UnityEngine.Profiling.Profiler.EndSample();
 
+        //UnityEngine.Profiling.Profiler.BeginSample("====Start4");
         bakedMesh = new Mesh();
 
         GameObject newBone;
@@ -139,9 +152,13 @@ public class DynamicPartSever : MonoBehaviour
             newBoneGOQueue.Enqueue(newBone);
             newBoneGO2Tr[newBone] = newBone.transform;
         }
+        //UnityEngine.Profiling.Profiler.EndSample();
 
+        //UnityEngine.Profiling.Profiler.BeginSample("====Start5");
         newBodyMesh = new Mesh();
+        //UnityEngine.Profiling.Profiler.EndSample();
 
+        //UnityEngine.Profiling.Profiler.BeginSample("====Start6");
         rde = GetComponent<RagdollEnabler>();
 
         attackEffect = GameObject.Find("taohuadao_biboyunhai_zidan");
@@ -209,7 +226,7 @@ public class DynamicPartSever : MonoBehaviour
             }
             else
             {
-                subTriangles = new List<int>(8192);
+                subTriangles = new List<int>((int)_originalMesh.GetIndexCount(subMesh) + 32);
                 _originalMesh.GetTriangles(subTriangles, subMesh);
                 oriTriangles[subMesh] = subTriangles;
             }            
@@ -328,6 +345,7 @@ public class DynamicPartSever : MonoBehaviour
     // 收集手臂骨骼链
     void CollectPartBones(Transform startBone)
     {
+        //UnityEngine.Profiling.Profiler.BeginSample("====CollectPartBones,TraverseChild");
         HashSet<int> bones = new HashSet<int>();
         _partBonesDic[startBone] = bones;
         bones.Clear();
@@ -350,9 +368,12 @@ public class DynamicPartSever : MonoBehaviour
             index++;
         }
         _partBonesTrDic[startBone] = bonesArray;
+        //UnityEngine.Profiling.Profiler.EndSample();
 
-        //UnityEngine.Profiling.Profiler.BeginSample("====triOriIndexHash");
-        var triOriIndexHash = new Dictionary<int, int>(512);
+        //UnityEngine.Profiling.Profiler.BeginSample("====CollectPartBones,triOriIndexHash");
+        var triOriIndexHash = new Dictionary<int, int>(400);
+        //UnityEngine.Profiling.Profiler.EndSample();
+        //UnityEngine.Profiling.Profiler.BeginSample("====CollectPartBones,triOriIndexHash2");
         partTr2TriIndexHashDic[startBone] = triOriIndexHash;
         for (int subMesh = 0; subMesh < _originaleSubmeshCount; subMesh++)
         {
@@ -381,6 +402,7 @@ public class DynamicPartSever : MonoBehaviour
         }
         //UnityEngine.Profiling.Profiler.EndSample();
 
+        //UnityEngine.Profiling.Profiler.BeginSample("====CollectPartBones,new Mesh");
         var newMesh = new Mesh();
         //预先赋值，消除后续extractmesh的gc开销
         newVertices.Clear();
@@ -393,6 +415,7 @@ public class DynamicPartSever : MonoBehaviour
         newMesh.RecalculateBounds();
         newMesh.RecalculateTangents();
         newMeshDic[startBone] = newMesh;
+        //UnityEngine.Profiling.Profiler.EndSample();
     }
 
     IEnumerator SeverPart(Transform tr, SkinnedMeshRenderer subSmr)
@@ -472,9 +495,9 @@ public class DynamicPartSever : MonoBehaviour
         //GameObject newRoot = new GameObject(original.name); // 保持相同名称
         GameObject newRoot = GetNewBone();
 #if UNITY_EDITOR
-        UnityEngine.Profiling.Profiler.BeginSample("DuplicateBoneHierarchy.GC only run in Unity Editor.");
+        //UnityEngine.Profiling.Profiler.BeginSample("DuplicateBoneHierarchy.GC only run in Unity Editor.");
         newRoot.name = original.name;
-        UnityEngine.Profiling.Profiler.EndSample();
+        //UnityEngine.Profiling.Profiler.EndSample();
 #endif
         //newRoot.transform.SetPositionAndRotation(original.position, original.rotation);
         //Debug.LogError("====original.position:"+ original.position + " newRoot.transform:"+ newRoot.transform.position);
@@ -517,9 +540,9 @@ public class DynamicPartSever : MonoBehaviour
 
                 GameObject newBone = GetNewBone();
 #if UNITY_EDITOR
-                UnityEngine.Profiling.Profiler.BeginSample("DuplicateBoneHierarchy.GC only run in Unity Editor.");
+                //UnityEngine.Profiling.Profiler.BeginSample("DuplicateBoneHierarchy.GC only run in Unity Editor.");
                 newBone.name = child.name;
-                UnityEngine.Profiling.Profiler.EndSample();
+                //UnityEngine.Profiling.Profiler.EndSample();
 #endif
                 var newBoneTr = newBoneGO2Tr[newBone];
                 //newBone.transform.SetParent(boneMap[current]);
@@ -1178,7 +1201,7 @@ public class DynamicPartSever : MonoBehaviour
         }
 
         _oriMeshBoneWeightArray = null;
-        if(null != _oriUVs)
+        if (null != _oriUVs)
         {
             _oriUVs.Clear();
             _oriUVs = null;
