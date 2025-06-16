@@ -2,17 +2,24 @@ using UnityEngine;
 using System.Collections.Generic;
 using System;
 using System.Collections;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 [RequireComponent(typeof(Animation))]
 public class DynamicPartSever : MonoBehaviour
 {
     [Header("Settings")]
+    [SerializeField]
+    private SkinnedMeshRenderer bodySMR;
     //[SerializeField] private Transform _shoulderBone;  // 肩膀骨骼（分离点）
     //[SerializeField] private Transform _headBone;  // 肩膀骨骼（分离点）
     [SerializeField] private List<Transform> dismemberBoneList;  // 肩膀骨骼（分离点）
-    [SerializeField]
-    private List<SkinnedMeshRenderer> subSkinnedMeshRenderList;
+    [SerializeField] private List<SkinnedMeshRenderer> subSkinnedMeshRenderList;
     private Dictionary<Transform, Transform[]> subSkinBonesDic = new Dictionary<Transform, Transform[]>(4);
+    [SerializeField]
+    private List<GameObject> partGos;
+    private bool isDie = false;
     //[SerializeField] private Material _woundMaterial;  // 截面材质
     [SerializeField] private float _severForce = 5f;   // 分离力度
 
@@ -68,7 +75,7 @@ public class DynamicPartSever : MonoBehaviour
     void Start()
     {
         //UnityEngine.Profiling.Profiler.BeginSample("====Start1_1");
-        _bodySMR = GetComponentInChildren<SkinnedMeshRenderer>();
+        _bodySMR = bodySMR;// GetComponentInChildren<SkinnedMeshRenderer>();
         _bodySMRTr = _bodySMR.transform;
         _bodySMRSharedMaterials = _bodySMR.sharedMaterials;
         _originalMesh = _bodySMR.sharedMesh;// Instantiate(_bodySMR.sharedMesh); // 创建网格副本
@@ -182,6 +189,12 @@ public class DynamicPartSever : MonoBehaviour
         }
 
         //UnityEngine.Profiling.Profiler.EndSample();
+
+        for (int i = 0; i < partGos.Count; i++)
+        {
+            var go = partGos[i];
+            go.SetActive(false);
+        }
     }
     private List<BoneWeight> _oriMeshBoneWeights = new List<BoneWeight>(2048);
 #if USE_UPDATE_BODY_MESH
@@ -263,11 +276,15 @@ public class DynamicPartSever : MonoBehaviour
                 return;
             }
             elapseTime = 0;
+#if USE_PART_PREFAB
+            StartCoroutine(SeverPart(dismemberBoneList[0], partGos[0]));
+#else
             StartCoroutine(SeverPart(dismemberBoneList[0], subSkinnedMeshRenderList[0]));
+#endif
             //partSeverdSet.Add(0);
         }
 
-        if(Input.GetKeyDown(KeyCode.S))
+        if (Input.GetKeyDown(KeyCode.S))
         {
             targetTr = dismemberBoneList[1];
             if (partSeverdSet.Contains(targetTr))
@@ -275,7 +292,11 @@ public class DynamicPartSever : MonoBehaviour
                 return;
             }
             elapseTime = 0;
+#if USE_PART_PREFAB
+            StartCoroutine(SeverPart(dismemberBoneList[1], partGos[1]));
+#else
             StartCoroutine(SeverPart(dismemberBoneList[1], subSkinnedMeshRenderList[1]));
+#endif
             //partSeverdSet.Add(1);
         }
         if (Input.GetKeyDown(KeyCode.D))
@@ -286,7 +307,11 @@ public class DynamicPartSever : MonoBehaviour
                 return;
             }
             elapseTime = 0;
+#if USE_PART_PREFAB
+            StartCoroutine(SeverPart(dismemberBoneList[2], partGos[2]));
+#else
             StartCoroutine(SeverPart(dismemberBoneList[2], subSkinnedMeshRenderList[2]));
+#endif
             //partSeverdSet.Add(2);
         }
 
@@ -296,6 +321,8 @@ public class DynamicPartSever : MonoBehaviour
             {
                 rde.ActivateRagdoll(UnityEngine.Random.onUnitSphere * _severForce * 10);
             }
+
+            isDie = true;
         }
         bool hide = elapseTime > flyTotalTime;
         if(hide)
@@ -315,7 +342,7 @@ public class DynamicPartSever : MonoBehaviour
                 attackEffect.transform.position = new Vector3(10000, 0, 0);
             }
         }
-#if USE_SCALE_BONE
+#if !USE_UPDATE_BODY_MESH
         //在lateUpdate里将已经肢解的骨头的位置归0
         foreach (var bone in partSeverdSet)
         {
@@ -329,6 +356,13 @@ public class DynamicPartSever : MonoBehaviour
             //}
         }
 #endif
+        if(!isDie)
+        {
+            //整体移动
+            var trPos = transform.position;
+            trPos.z += 0.01f;
+            transform.position = trPos;
+        }
     }
 
     void TraverseChild(Transform tr, HashSet<int> bones)
@@ -440,7 +474,11 @@ public class DynamicPartSever : MonoBehaviour
         //UnityEngine.Profiling.Profiler.EndSample();
     }
 
+#if USE_PART_PREFAB
+    IEnumerator SeverPart(Transform tr, GameObject part)
+#else
     IEnumerator SeverPart(Transform tr, SkinnedMeshRenderer subSmr)
+#endif
     {
         yield return new WaitForSeconds(flyTotalTime);
         //显示攻击特效
@@ -454,7 +492,7 @@ public class DynamicPartSever : MonoBehaviour
 
         //Animation ani = GetComponent<Animation>();
         //ani.Sample();
-
+#if !USE_PART_PREFAB
         // 步骤1：复制手臂骨骼
         Transform severedRoot = DuplicateBoneHierarchy(tr);
 
@@ -462,17 +500,19 @@ public class DynamicPartSever : MonoBehaviour
         var triOriIndexHash = partTr2TriIndexHashDic[tr];
         // 步骤2：创建手臂网格
         CreateSeveredPartMesh(triOriIndexHash, tr, severedRoot, subSmr);
+#else
+        GameObject severedRoot = part;
+#endif
 
 #if USE_UPDATE_BODY_MESH
         // 步骤3：更新身体网格
         UpdateBodyMesh(triOriIndexHash, tr);
-#endif
-#if USE_SCALE_BONE
+#else
         partSeverdSet.Add(tr);
 #endif
 
         // 步骤4：添加物理效果
-        AddPhysicsToSeveredPart(severedRoot.gameObject);
+        AddPhysicsToSeveredPart(severedRoot.gameObject, tr);
 
         // 步骤5：创建伤口
         //CreateWoundEffect(tr);
@@ -702,6 +742,53 @@ public class DynamicPartSever : MonoBehaviour
         {
             subSmr.bones = subSkinBonesDic[original];
         }
+
+#if UNITY_EDITOR && CREATE_PART_PREFAB
+        string folderPath = "Assets/Resources/Prefabs"; // 示例路径
+        string prefabName = "Prefab" + original.name.Replace(" ", string.Empty) + ".prefab";
+        string meshName = "Mesh" + original.name.Replace(" ", string.Empty) + ".asset";
+        string fullPath = System.IO.Path.Combine(folderPath, prefabName);
+        fullPath = fullPath.Replace("\\", "/");
+        string meshFullPath = System.IO.Path.Combine(folderPath, meshName);
+        meshFullPath = meshFullPath.Replace("\\", "/");
+
+        // 3. 确保文件夹存在
+        if (!System.IO.Directory.Exists(folderPath))
+        {
+            System.IO.Directory.CreateDirectory(folderPath);
+        }
+
+        // 创建临时克隆对象以避免修改原始对象
+        GameObject tempObject = Instantiate(newSMR.gameObject);
+
+        // 获取 SkinnedMeshRenderer
+        SkinnedMeshRenderer skinnedRenderer = tempObject.GetComponent<SkinnedMeshRenderer>();
+        // 保存 Mesh 资源
+        Mesh originalMesh = skinnedRenderer.sharedMesh;
+        if (originalMesh != null)
+        {
+            // 创建 Mesh 副本（避免修改原始资源）
+            Mesh meshCopy = Instantiate(originalMesh);
+
+            // 保存 Mesh 到文件
+            AssetDatabase.CreateAsset(meshCopy, meshFullPath);
+
+            // 更新渲染器引用
+            skinnedRenderer.sharedMesh = meshCopy;
+        }
+
+        // 4. 保存为预设
+        GameObject prefab = PrefabUtility.CreatePrefab(fullPath, tempObject);
+
+        if (prefab != null)
+        {
+            Debug.LogError("预设保存成功: " + fullPath);
+        }
+        else
+        {
+            Debug.LogError("预设保存失败！");
+        }
+#endif
     }
 
     private List<Vector3> currVertices = new List<Vector3>(2048);
@@ -1059,8 +1146,25 @@ public class DynamicPartSever : MonoBehaviour
     }
 #endif
 
-    void AddPhysicsToSeveredPart(GameObject severedPart)
+    void AddPhysicsToSeveredPart(GameObject severedPart, Transform partRootBone)
     {
+#if USE_PART_PREFAB
+        var tr = severedPart.transform;
+        tr.parent = null;
+        severedPart.SetActive(true);
+        //设定初始位置
+        tr.position = partRootBone.position;
+        Rigidbody rb = severedPart.AddComponent<Rigidbody>();
+        rb.useGravity = true;
+        rb.isKinematic = false;
+        rb.mass = 10f;
+        rb.drag = 1f;
+        rb.AddForce(UnityEngine.Random.onUnitSphere * _severForce / 3, ForceMode.Impulse);
+
+        MeshCollider collider = severedPart.GetComponentInChildren<MeshCollider>();
+        collider.enabled = true;
+        collider.convex = true;
+#else
         //Rigidbody rb = severedPart.AddComponent<Rigidbody>();
         Rigidbody rb = severedPart.GetComponent<Rigidbody>();
         rb.useGravity = true;
@@ -1076,6 +1180,7 @@ public class DynamicPartSever : MonoBehaviour
         collider.sharedMesh = severedPart.GetComponentInChildren<SkinnedMeshRenderer>().sharedMesh;
 
         //severedPart.AddComponent<BoneFreezer>();
+#endif
     }
 
     //void CreateWoundEffect(Transform original)
@@ -1297,6 +1402,14 @@ public class DynamicPartSever : MonoBehaviour
         {
             validTriangles.Clear();
             validTriangles = null;
+        }
+#else
+        if(null != partGos)
+        {
+            for(int i = 0; i < partGos.Count; i++)
+            {
+                Destroy(partGos[i]);
+            }
         }
 #endif
     }
