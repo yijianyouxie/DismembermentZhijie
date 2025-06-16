@@ -23,6 +23,7 @@ public class DynamicPartSever : MonoBehaviour
     //[SerializeField] private Material _woundMaterial;  // 截面材质
     [SerializeField] private float _severForce = 5f;   // 分离力度
 
+    #if !USE_PART_PREFAB
     private SkinnedMeshRenderer _bodySMR;
     private Transform _bodySMRTr;
     private Material[] _bodySMRSharedMaterials;
@@ -40,12 +41,14 @@ public class DynamicPartSever : MonoBehaviour
 
     //value表示的是，此肢解部分的各个骨骼在原整体骨骼中的index
     private Dictionary<Transform, HashSet<int>> _partBonesDic = new Dictionary<Transform, HashSet<int>>(4);
+#endif
 #if USE_UPDATE_BODY_MESH
     //value表示的是，此肢解部分的各个骨骼
     private Dictionary<Transform, Transform[]> _partBonesTrDic = new Dictionary<Transform, Transform[]>(4);
 #endif
     //此部分是否被肢解的标记
     private HashSet<Transform> partSeverdSet = new HashSet<Transform>();
+#if !USE_PART_PREFAB
     //各个部分的骨头在原骨骼中的index
     private List<int> _partBonesOriIndexList = new List<int>(8);
     private float boneWeightThreshold = 0.3f;
@@ -62,6 +65,7 @@ public class DynamicPartSever : MonoBehaviour
 
     //key，此部分；value：此部分下的三角形顶点索引hash
     private Dictionary<Transform, Dictionary<int, int>> partTr2TriIndexHashDic = new Dictionary<Transform, Dictionary<int, int>>(4);
+#endif
 #if USE_UPDATE_BODY_MESH
     private Mesh newBodyMesh;
 #endif
@@ -74,14 +78,16 @@ public class DynamicPartSever : MonoBehaviour
 
     void Start()
     {
+#if !USE_PART_PREFAB
         //UnityEngine.Profiling.Profiler.BeginSample("====Start1_1");
         _bodySMR = bodySMR;// GetComponentInChildren<SkinnedMeshRenderer>();
         _bodySMRTr = _bodySMR.transform;
         _bodySMRSharedMaterials = _bodySMR.sharedMaterials;
         _originalMesh = _bodySMR.sharedMesh;// Instantiate(_bodySMR.sharedMesh); // 创建网格副本
         //UnityEngine.Profiling.Profiler.EndSample();
+#endif
 
-        //UnityEngine.Profiling.Profiler.BeginSample("====Start1_2");
+//UnityEngine.Profiling.Profiler.BeginSample("====Start1_2");
 #if USE_UPDATE_BODY_MESH
         oriBindposeList.Clear();
         _originalMesh.GetBindposes(oriBindposeList);
@@ -92,12 +98,13 @@ public class DynamicPartSever : MonoBehaviour
             oriBindposes[i] = oriBindposeList[i];
         }
 #endif
-        //UnityEngine.Profiling.Profiler.EndSample();
-
+//UnityEngine.Profiling.Profiler.EndSample();
+#if !USE_PART_PREFAB
         //UnityEngine.Profiling.Profiler.BeginSample("====Start1_3");
         _oriMeshBoneWeights.Clear();
         _originalMesh.GetBoneWeights(_oriMeshBoneWeights);
         //UnityEngine.Profiling.Profiler.EndSample();
+#endif
         //UnityEngine.Profiling.Profiler.BeginSample("====Start1_4");
 #if USE_UPDATE_BODY_MESH
         var boneWeightCount = _oriMeshBoneWeights.Count;
@@ -110,7 +117,7 @@ public class DynamicPartSever : MonoBehaviour
         //UnityEngine.Profiling.Profiler.EndSample();
 
         GetOriginalInfos();
-
+#if !USE_PART_PREFAB
         //UnityEngine.Profiling.Profiler.BeginSample("====Start2");
         //_originalBodyMesh = _bodySMR.sharedMesh;
         _originalRootBone = _bodySMR.rootBone;
@@ -167,6 +174,7 @@ public class DynamicPartSever : MonoBehaviour
             newBoneGO2Tr[newBone] = newBone.transform;
         }
         //UnityEngine.Profiling.Profiler.EndSample();
+#endif
 
         //UnityEngine.Profiling.Profiler.BeginSample("====Start5");
 #if USE_UPDATE_BODY_MESH
@@ -196,13 +204,16 @@ public class DynamicPartSever : MonoBehaviour
             go.SetActive(false);
         }
     }
+#if !USE_PART_PREFAB
     private List<BoneWeight> _oriMeshBoneWeights = new List<BoneWeight>(2048);
+#endif
 #if USE_UPDATE_BODY_MESH
     private List<Vector3> _oriMeshVertices = new List<Vector3>(2048);
     private BoneWeight[] _oriMeshBoneWeightArray;
     private Matrix4x4[] oriBindposes;
     private List<Matrix4x4> oriBindposeList = new List<Matrix4x4>();
 #endif
+#if !USE_PART_PREFAB
     private List<Vector2> _oriUVs = new List<Vector2>(2048);
     //private List<Vector2> _oriUVs2 = new List<Vector2>(512);
     //private List<Vector2> _oriUVs3 = new List<Vector2>(512);
@@ -215,21 +226,24 @@ public class DynamicPartSever : MonoBehaviour
     //private int _oriColorsCount = 0;
     private int _originaleSubmeshCount = 0;
     private Dictionary<int, List<int>> oriTriangles = new Dictionary<int, List<int>>(2);
-
+#endif
     private void GetOriginalInfos()
     {
 #if USE_UPDATE_BODY_MESH
         _oriMeshVertices.Clear();
 #endif
+#if !USE_PART_PREFAB
         _oriUVs.Clear();
-        //_oriUVs2.Clear();
-        //_oriUVs3.Clear();
-        //_oriUVs4.Clear();
-        //_oriColors.Clear();
+#endif
+//_oriUVs2.Clear();
+//_oriUVs3.Clear();
+//_oriUVs4.Clear();
+//_oriColors.Clear();
 #if USE_UPDATE_BODY_MESH
         _originalMesh.GetVertices(_oriMeshVertices);
 #endif
 
+#if !USE_PART_PREFAB
         _originalMesh.GetUVs(0, _oriUVs);
         //_originalMesh.GetUVs(1, _oriUVs2);
         //_originalMesh.GetUVs(2, _oriUVs3);
@@ -261,6 +275,7 @@ public class DynamicPartSever : MonoBehaviour
 
         
         //UnityEngine.Profiling.Profiler.EndSample();
+#endif
     }
 
     private float elapseTime = 0;
@@ -364,7 +379,7 @@ public class DynamicPartSever : MonoBehaviour
             transform.position = trPos;
         }
     }
-
+#if !USE_PART_PREFAB
     void TraverseChild(Transform tr, HashSet<int> bones)
     {
         if(null != tr)
@@ -396,9 +411,11 @@ public class DynamicPartSever : MonoBehaviour
             }
         }
     }
+#endif
     // 收集手臂骨骼链
     void CollectPartBones(Transform startBone)
     {
+#if !USE_PART_PREFAB
         //UnityEngine.Profiling.Profiler.BeginSample("====CollectPartBones,TraverseChild");
         HashSet<int> bones = new HashSet<int>();
         _partBonesDic[startBone] = bones;
@@ -412,6 +429,7 @@ public class DynamicPartSever : MonoBehaviour
         //    if (current.childCount > 0) current = current.GetChild(0);
         //    else break;
         //}
+#endif
 #if USE_UPDATE_BODY_MESH
         //获取长度后，开辟数组
         var bonesLen = bones.Count;
@@ -425,7 +443,7 @@ public class DynamicPartSever : MonoBehaviour
         _partBonesTrDic[startBone] = bonesArray;
 #endif
         //UnityEngine.Profiling.Profiler.EndSample();
-
+#if !USE_PART_PREFAB
         //UnityEngine.Profiling.Profiler.BeginSample("====CollectPartBones,triOriIndexHash");
         var triOriIndexHash = new Dictionary<int, int>(400);
         //UnityEngine.Profiling.Profiler.EndSample();
@@ -472,6 +490,7 @@ public class DynamicPartSever : MonoBehaviour
         newMesh.RecalculateTangents();
         newMeshDic[startBone] = newMesh;
         //UnityEngine.Profiling.Profiler.EndSample();
+#endif
     }
 
 #if USE_PART_PREFAB
@@ -524,7 +543,7 @@ public class DynamicPartSever : MonoBehaviour
 
         //_isSevered = true;
     }
-
+#if !USE_PART_PREFAB
     private GameObject GetNewBone()
     {
         if(newBoneGOQueue.Count > 0)
@@ -1063,6 +1082,7 @@ public class DynamicPartSever : MonoBehaviour
         //return partBonesList.Contains(boneIndex);
         return partBonesList.Contains(boneIndex);
     }
+#endif
 #if USE_UPDATE_BODY_MESH
     private List<int> validTriangles = new List<int>(9192);
     void UpdateBodyMesh(Dictionary<int, int> triOriIndexHash, Transform original)
@@ -1229,7 +1249,7 @@ public class DynamicPartSever : MonoBehaviour
             subSkinBonesDic.Clear();
             subSkinBonesDic = null;
         }
-
+#if !USE_PART_PREFAB
         _bodySMRSharedMaterials = null;
         _originalBones = null;
 
@@ -1248,6 +1268,7 @@ public class DynamicPartSever : MonoBehaviour
             _partBonesDic.Clear();
             _partBonesDic = null;
         }
+#endif
 #if USE_UPDATE_BODY_MESH
         if(null != _partBonesTrDic)
         {
@@ -1260,6 +1281,7 @@ public class DynamicPartSever : MonoBehaviour
             partSeverdSet.Clear();
             partSeverdSet = null;
         }
+#if !USE_PART_PREFAB
         if(null != _partBonesOriIndexList)
         {
             _partBonesOriIndexList.Clear();
@@ -1381,6 +1403,7 @@ public class DynamicPartSever : MonoBehaviour
             newUV.Clear();
             newUV = null;
         }
+#endif
 #if USE_UPDATE_BODY_MESH
         if(null != _oriMeshVertices)
         {
@@ -1404,7 +1427,7 @@ public class DynamicPartSever : MonoBehaviour
             validTriangles = null;
         }
 #else
-        if(null != partGos)
+        if (null != partGos)
         {
             for(int i = 0; i < partGos.Count; i++)
             {
