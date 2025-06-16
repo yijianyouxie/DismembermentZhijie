@@ -283,11 +283,6 @@ public class DynamicPartSever : MonoBehaviour
     private Transform targetTr = null;
     void LateUpdate()
     {
-        var rr = GetComponent<Rigidbody>();
-        if(null != rr)
-        {
-            Debug.LogError("=============rr" + rr.detectCollisions);
-        }
         if (Input.GetKeyDown(KeyCode.A) )
         {
             targetTr = dismemberBoneList[0];
