@@ -150,6 +150,7 @@ GameObject:
   - component: {fileID: 4665618853668084}
   - component: {fileID: 137631278142021230}
   - component: {fileID: 64835447735835456}
+  - component: {fileID: 54378899892791912}
   m_Layer: 0
   m_Name: PrefabBip01LThigh
   m_TagString: Untagged
@@ -326,6 +327,7 @@ GameObject:
   - component: {fileID: 4428829319254710}
   - component: {fileID: 137039189246314458}
   - component: {fileID: 64515826209122810}
+  - component: {fileID: 54301991806161810}
   m_Layer: 0
   m_Name: PrefabBip01RUpperArm
   m_TagString: Untagged
@@ -632,6 +634,7 @@ GameObject:
   - component: {fileID: 4203087552162808}
   - component: {fileID: 137076390693357286}
   - component: {fileID: 64899152614249388}
+  - component: {fileID: 54301322009694634}
   m_Layer: 0
   m_Name: PrefabBip01Head
   m_TagString: Untagged
@@ -1293,6 +1296,36 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!54 &54301322009694634
+Rigidbody:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1926459456522906}
+  serializedVersion: 2
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
+--- !u!54 &54301991806161810
+Rigidbody:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1380169402064164}
+  serializedVersion: 2
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
 --- !u!54 &54351613330074138
 Rigidbody:
   m_ObjectHideFlags: 1
@@ -1301,6 +1334,21 @@ Rigidbody:
   m_GameObject: {fileID: 1228812141077594}
   serializedVersion: 2
   m_Mass: 1.875
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
+--- !u!54 &54378899892791912
+Rigidbody:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1235466609017366}
+  serializedVersion: 2
+  m_Mass: 1
   m_Drag: 0
   m_AngularDrag: 0.05
   m_UseGravity: 1

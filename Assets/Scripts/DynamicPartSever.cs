@@ -283,6 +283,11 @@ public class DynamicPartSever : MonoBehaviour
     private Transform targetTr = null;
     void LateUpdate()
     {
+        var rr = GetComponent<Rigidbody>();
+        if(null != rr)
+        {
+            Debug.LogError("=============rr" + rr.detectCollisions);
+        }
         if (Input.GetKeyDown(KeyCode.A) )
         {
             targetTr = dismemberBoneList[0];
@@ -1174,9 +1179,10 @@ public class DynamicPartSever : MonoBehaviour
         severedPart.SetActive(true);
         //设定初始位置
         tr.position = partRootBone.position;
-        Rigidbody rb = severedPart.AddComponent<Rigidbody>();
-        rb.useGravity = true;
+        Rigidbody rb = severedPart.GetComponentInChildren<Rigidbody>();
+        rb.detectCollisions = true;
         rb.isKinematic = false;
+        rb.useGravity = true;
         rb.mass = 10f;
         rb.drag = 1f;
         rb.AddForce(UnityEngine.Random.onUnitSphere * _severForce / 3, ForceMode.Impulse);
